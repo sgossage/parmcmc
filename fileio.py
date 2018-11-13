@@ -10,7 +10,8 @@ def get_cmdf(cmddir, bf, age, logz, vvc, av, dmod):
 
     vvc = str(vvc)
     #age = str(age)
-
+    if type(age) == str:
+        age = 9.00
     # for the path to the .cmd file:
     cmdpath = os.path.join(cmddir,
                                    'bf{:s}_t{:.2f}_logz{:s}_vvc{:s}_av{:s}_dmod{:s}*.out.cmd'.format(bf, age,
