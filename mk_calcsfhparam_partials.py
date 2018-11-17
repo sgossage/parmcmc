@@ -7,10 +7,11 @@ import os
 import sys
 import numpy as np
 from mk_paramfs import mk_agegrid
+from fileio import parse_fname
 
 # sys.argv[x]: 1, 'v' filter (bluer); 2, 'i' filter (redder); 3, photometry file; 4
 
-def parse_fname(photfn):
+#def parse_fname(photfn):
 
     # photometry file has bfx.x_avx.x_tx.xx_x.xx_logZx.xx_dmod_x.xx.phot.mags
     # this takes these parameters from the file name so that they may be used 
@@ -18,24 +19,24 @@ def parse_fname(photfn):
 
     # Add these parameters to the cluster photometry file names too.
 
-    bf = float((photfn.split('bf')[-1]).split('_')[0])
-    av = float((photfn.split('av')[-1]).split('_')[0])
-    agebin = (photfn.split('_t')[-1]).split('_')[:2]
-    try:
-        agebin = list(map(float, agebin))
-    except ValueError:
+#    bf = float((photfn.split('bf')[-1]).split('_')[0])
+#    av = float((photfn.split('av')[-1]).split('_')[0])
+#    agebin = (photfn.split('_t')[-1]).split('_')[:2]
+#    try:
+#        agebin = list(map(float, agebin))
+#    except ValueError:
         # age string is just a delta tx.xx, no subsequent endpoint.
-        agebin = [float((photfn.split('_t')[-1]).split('_')[0])]
+#        agebin = [float((photfn.split('_t')[-1]).split('_')[0])]
         # use smallest model resolution, 0.02 to define endpoint.
-        agebin.append(agebin[0]+0.02)
-    logZ = float((photfn.split('logZ')[-1]).split('_')[0])
-    if "dmod" in photfn:
-        dmod = float((photfn.split('dmod')[-1]).split('_')[0])
-    else:
+#        agebin.append(agebin[0]+0.02)
+#    logZ = float((photfn.split('logZ')[-1]).split('_')[0])
+#    if "dmod" in photfn:
+#        dmod = float((photfn.split('dmod')[-1]).split('_')[0])
+#    else:
         # assumes that dmod is 0 if not included in file name.
-        dmod = 0.0
+#        dmod = 0.0
 
-    return bf, av, agebin, logZ, dmod
+#    return bf, av, agebin, logZ, dmod
 
 if __name__ == '__main__':
 
@@ -63,6 +64,13 @@ if __name__ == '__main__':
     v = np.genfromtxt(os.path.join(os.getcwd(), phot_dir, photfn), usecols=(0,))
     i = np.genfromtxt(os.path.join(os.getcwd(), phot_dir, photfn), usecols=(1,))
 
+    vmax = 22.5
+    imax = vmax
+    good_i = (-99.0 < v) & (v < vmax) & (-99.0 < i) & (i < imax)
+    print(good_i)
+    v = v[good_i]
+    i = i[good_i]
+
     # try getting errors:
     try:
         verr = np.genfromtxt(os.path.join(os.getcwd(), phot_dir, photfn.replace('.phot', '.err')), usecols=(0,))
@@ -78,27 +86,27 @@ if __name__ == '__main__':
     #mag_cap = 8.0
     #vmax = mag_cap
     #imax = mag_cap
-    vmax = np.amax(v) + 1.5
-    imax = np.amax(i) + 1.5
+#    vmax = np.amax(v) + 1.5
+#    imax = np.amax(i) + 1.5
 
     vmin = np.amin(v) - 1.5
     imin = np.amin(i) - 1.5
     vmi_max = np.amax(vmi) + 0.5
     vmi_min = np.amin(vmi) - 0.5
 
-    # dav needs to be dynamic if not fixed.
-    dav = 0.0
-    av0 = av - dav*2.0
+    # dav needs to be dynamic if not fixed. Can't be zero!
+    dav = 0.01
+    av0 = av #- dav*2.0
     if av0 < 0.0:
         av0 = 0.0
-    av1 = av + dav*2.0
+    av1 = av #+ dav*2.0
 
-    # dmod needs to be dynamic if not fixed.
-    ddmod = 0.0
-    dmod0 = dmod - ddmod*2.0
+    # ddmod needs to be dynamic if not fixed. Can't be zero!
+    ddmod = 1.0
+    dmod0 = dmod #- ddmod*2.0
     if dmod0 < 0.0:
         dmod0 = 0.0
-    dmod1 = dmod + ddmod*2.0
+    dmod1 = dmod #+ ddmod*2.0
 
     # set the magnitude and color bin sizes to avg. error size; use suggested dm=0.10 and dc=0.05 
     # as lower lims to bin size.

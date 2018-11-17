@@ -24,62 +24,68 @@ def MyFormatter(x,lim):
         return '{0}e{1}'.format(x/10**np.floor(np.log10(x)),int(np.log10(x)))
 
 # This does a pg style plot of the models and data, given a set of weights for the models:
-def pgplot(obs, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, svname=None, log=False, svdir=None):
+def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, svname=None, log=False, svdir=None):
 
     """
         Creates a MATCH pg style plot of data, model, data-model, and -2lnP map.
     """
 
-    composite_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, 0.0, av, dmod), ymag='I')
+    composite_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, 0.0, av, dmod))#, ymag='I')
     composite_cmd.cmd['Nsim'] = np.zeros(len(composite_cmd.cmd['Nsim']))
 
     vvc_range = np.arange(0.0, 0.7, 0.1)
     age_range = np.arange(8.5, 9.5, 0.02)
+    mu = weights[7]
     try:
         sigma = weights[8]
     except IndexError:
         sigma = 0.0
 
-    best_gweights = gen_gaussweights(age_range, weights[7], sigma)
-    for i, avvc in enumerate(vvc_range):
-        for j, anage in enumerate(age_range):
+    ageweights = gen_gaussweights(age_range, mu, sigma)
+    #for i, avvc in enumerate(vvc_range):
+    #    for j, anage in enumerate(age_range):
 
-            a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, anage, logz, avvc, av, dmod), ymag='I')
+    #        a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, anage, logz, avvc, av, dmod))#, ymag='I')
             # 1 * (jth age weight, added i times) * ith rotation rate.
-            a_cmd.cmd['Nsim'] = (a_cmd.cmd['Nsim'] / np.sum(a_cmd.cmd['Nsim'])) * (best_gweights[j]) * (10**weights[i])
+    #        a_cmd.cmd['Nsim'] = (a_cmd.cmd['Nsim'] / np.sum(a_cmd.cmd['Nsim'])) * (best_gweights[j]) * (10**weights[i])
 
             # add each cmd (re-weighted by solutions) to the composite CMD model.
-            composite_cmd.cmd['Nsim'] += a_cmd.cmd['Nsim']
+    #        composite_cmd.cmd['Nsim'] += a_cmd.cmd['Nsim']
+
+    vvcweights = weights[:7]    
+
+    composite_cmd.cmd['Nsim'] += np.sum((10**vvcweights[:, np.newaxis])*np.sum(ageweights[:,np.newaxis]*model, axis=1), axis=0)
+
 
     composite_cmd.cmd['Nobs'] = obs
 
     # arbitrary vvc used -- just need a file name to break up.
-    fn_base = (fio.get_cmdf(cmddir, bf, age, logz, 0.0, av, dmod).split('/')[-1]).split('.out.cmd')[0]
-    fehval = float((fn_base.split('logz')[-1]).split('_')[0])
-    lageval = float((fn_base.split('_t')[-1]).split('_')[0])
-    avval = float((fn_base.split('_av')[-1]).split('_')[0])
-    dmodval = float((fn_base.split('_dmod')[-1]).split('_')[0])
+    #fn_base = (fio.get_cmdf(cmddir, bf, age, logz, 0.0, av, dmod).split('/')[-1]).split('.out.cmd')[0]
+    #fehval = float((fn_base.split('logz')[-1]).split('_')[0])
+    #lageval = float((fn_base.split('_t')[-1]).split('_')[0])
+    #avval = float((fn_base.split('_av')[-1]).split('_')[0])
+    #dmodval = float((fn_base.split('_dmod')[-1]).split('_')[0])
 
     print(max(composite_cmd.cmd['Nsim']))
 
     filters, photstrs = match_to_mist(filters) 
     photstr = photstrs[0]
-
+    print(filters)
     redmag_name = filters[1]
     bluemag_name = filters[0]
 
     color_name = "{:s}-{:s}".format(bluemag_name, redmag_name)
 
-    iso00 = rmm.ISOCMD(fehval, 0.0, ebv= avval/3.1, photstr=photstr, exttag='TP')
-    iso00.set_isodata(lageval, color_name, redmag_name, dmod=dmodval)
+    iso00 = rmm.ISOCMD(round(float(logz), 2), 0.0, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+    iso00.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
-    iso06 = rmm.ISOCMD(fehval, 0.6, ebv= avval/3.1, photstr=photstr, exttag='TP')
-    iso06.set_isodata(lageval, color_name, redmag_name, dmod=dmodval)
+    iso06 = rmm.ISOCMD(round(float(logz), 2), 0.6, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+    iso06.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
     # (x, y), i.e., (color, red mag) points of each isochrone in a list:
     mist_pts = [
-                isoget_colmags(iso00, [color_name, redmag_name], lage=lageval, dmod=dmodval),
-                isoget_colmags(iso06, [color_name, redmag_name], lage=lageval, dmod=dmodval)
+                isoget_colmags(iso00, [color_name, bluemag_name], lage=round(float(mu), 2), dmod=round(float(dmod), 2)),
+                isoget_colmags(iso06, [color_name, bluemag_name], lage=round(float(mu), 2), dmod=round(float(dmod), 2))
                ]
 
     # recalculate the d-m and signifigance hesses using the new hesses.

@@ -76,7 +76,7 @@ def lnprior(theta, obsmass, lims):
     mu = theta[7]
     if len(theta) == 9:
         sigma = theta[8]
-        if sigma <= 0.02 or sigma > 1.2:
+        if sigma < 0.02 or sigma > 1.0:
             return -np.inf
     else:
         sigma = 0.0
@@ -215,16 +215,18 @@ def get_results(samples):
 
     return log_weights, lin_weights, percentiles, log_err, lin_err
 
-def genmod_agespread(cmddir, mass):
+def genmod_agespread(cmddir, mass, agemu, agesig):
 
     ages = np.arange(8.50, 9.50, 0.02)
-    mu, sig = 9.00, 0.02
-    ageweights = gen_gaussweights(ages, mu, sig)
+    ageweights = gen_gaussweights(ages, agemu, agesig)
+
+    photbase = cmddir.split('/')[1]
+    bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
 
     hess_arr = []
     for age in ages:
  
-        a_cmd = cmd.CMD(fio.get_cmdf(cmddir, "0.00", age, "-0.30", 0.0, "0.0", "0.00"))        
+        a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, 0.0, av, dmod))        
         mock_hess = a_cmd.cmd['Nsim']
         mock_hess /= np.sum(mock_hess)
         #if age == ages[0]:
@@ -244,16 +246,19 @@ def genmod_agespread(cmddir, mass):
 
     return mass*composite_hess
 
-def genmod_vvcspread(cmddir, age, mass):
+def genmod_vvcspread(cmddir, age, mass, vvcmu, vvcsig):
 
     vvcs = np.arange(0.0, 0.7, 0.1)
     mu, sig = 0.3, 0.05
-    vvcweights = gen_gaussweights(vvcs, mu, sig)
+    vvcweights = gen_gaussweights(vvcs, vvcmu, vvcsig)
+
+    photbase = cmddir.split('/')[1]
+    bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
 
     hess_arr = []
     for vvc in vvcs:
  
-        a_cmd = cmd.CMD(fio.get_cmdf(cmddir, "0.00", age, "-0.30", vvc, "0.0", "0.00"))
+        a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
         mock_hess = a_cmd.cmd['Nsim']
         mock_hess /= np.sum(mock_hess)
         #if age == ages[0]:
@@ -274,17 +279,20 @@ def genmod_vvcspread(cmddir, age, mass):
 
     return mass*composite_hess, truths
 
-def genmod_agevvcspread(cmddir, mass):
+def genmod_agevvcspread(cmddir, mass, agemu, agesig, vvcmu, vvcsig):
 
     ages = np.arange(8.50, 9.50, 0.02)
-    mu, sig = 9.00, 0.02
-    ageweights = gen_gaussweights(ages, mu, sig)
+    #mu, sig = 9.00, 0.3
+    ageweights = gen_gaussweights(ages, agemu, agesig)
 
     vvcs = np.arange(0.0, 0.7, 0.1)
-    mu, sig = 0.3, 0.05
-    vvcweights = gen_gaussweights(vvcs, mu, sig)
+    #mu, sig = 0.3, 0.2
+    vvcweights = gen_gaussweights(vvcs, vvcmu, vvcsig)
 
-    composite_hess = cmd.CMD(fio.get_cmdf(cmddir, "0.00", 9.00, "-0.30", 0.0, "0.0", "0.00"))
+    photbase = cmddir.split('/')[1]
+    bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
+
+    composite_hess = cmd.CMD(fio.get_cmdf(cmddir, bf, 9.00, logz, 0.0, av, dmod))
     composite_hess = np.zeros(len(composite_hess.cmd['Nsim']))
 
     vvc_pts = []
@@ -293,7 +301,7 @@ def genmod_agevvcspread(cmddir, mass):
         age_vector = [] 
         for j, an_age in enumerate(ages):
 
-            a_cmd = cmd.CMD(fio.get_cmdf(cmddir, "0.00", an_age, "-0.30", a_vvc, "0.0", "0.00"))
+            a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, an_age, logz, a_vvc, av, dmod))
             model_hess = a_cmd.cmd['Nsim']
             model_hess /= np.sum(model_hess)
 
