@@ -81,7 +81,7 @@ if __name__ == "__main__":
     if age is not "gauss":
         truths = np.append(truths, agemu)
         lin_truths = np.append(lin_truths, 10**agemu)
-        ndim = 8
+        ndim = 8    
     else:
         truths = np.append(truths, [agemu, agesig])
         lin_truths = np.append(lin_truths, [10**agemu, 10**agesig])
@@ -120,14 +120,14 @@ if __name__ == "__main__":
     # walkers initialized via uniform distribution centered on data mass, w/ +/- 1 range.
     pos = []
     for i in range(nwalkers):
-        posi = truths[:7] + np.random.uniform(-0.01, 0.01, 7)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
-        posi = np.append(posi, 9.0 + np.random.uniform(-0.2, 0.2, 1))
+        posi = truths[:7] + np.random.uniform(-2, 2, 7)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
+        posi = np.append(posi, 9.0 + np.random.uniform(-0.4, 0.4, 1))
         if ndim == 9:
             posi = np.append(posi, 0.1 + np.random.uniform(-0.05, 0.05, 1))
 
         pos.append(posi)
 
-    lims = np.array([[truth - 0.01, truth + 0.01] for truth in truths[:7]]) # was log10(obs) +/- 2 dex
+    lims = np.array([[truth - 2, truth + 2] for truth in truths[:7]]) # was log10(obs) +/- 2 dex
 
     print(truths)
     print(lin_truths)
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     _ = gfx.plot_random_weights(sampler, nsteps, ndim, log_weights, log_err, cmddir, log=True, svdir=svdir, truths=truths, burn=burn)
     log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, log=False, svdir=svdir, truths=lin_truths, burn=burn)
 
-    row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","age",])
+    row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","age"])
     if ndim == 9:
         row_names = np.append(row_names, "age_sig")
     np.savetxt(os.path.join(cmddir, svdir, 'log_solutions.txt'),

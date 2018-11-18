@@ -187,14 +187,14 @@ def get_results(samples):
                                                zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
                                                axis=0)))
         # percentiles gathered into an array:
-        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, mu])
+        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, mu, s])
     except ValueError:
         t0, t1, t2, t3, t4, t5, t6, mu = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
                                                zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
                                                axis=0)))
 
 
-    # percentiles gathered into an array:
+        # percentiles gathered into an array:
         percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, mu])
 
     # weights found at 50th percentile:
