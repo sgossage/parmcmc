@@ -47,13 +47,15 @@ if __name__ == "__main__":
     filters = [vfilter, ifilter]    
 
     truths = {0.0: 1e-2, 0.1: 1e-2, 0.2: 1e-2, 0.3: 1e-2, 
-              0.4: 1e-2, 0.5: 1e-2, 0.6: 1e-2}
+              0.4: 1e-2, 0.5: 1e-2, 0.6: 1e-2, 0.7: 1e-2,
+              0.8: 1e-2, 0.9: 1e-2}
 
     # generate specified model or get specified Hess:
     agemu = 9.00
     agesig = 0.3
     vvcmu = 0.3
     vvcsig = 0.2
+    Nrot = 10
 
     if mode == "mock":
         if vvc is not "gauss":
@@ -81,17 +83,17 @@ if __name__ == "__main__":
     if age is not "gauss":
         truths = np.append(truths, agemu)
         lin_truths = np.append(lin_truths, 10**agemu)
-        ndim = 8    
+        ndim = Nrot+1    
     else:
         truths = np.append(truths, [agemu, agesig])
         lin_truths = np.append(lin_truths, [10**agemu, 10**agesig])
-        ndim = 9
+        ndim = Nrot + 2
 
     # form the array of models spanning age and v/vc grid space:
     # structure is an NxM dimensional matrix of Hess diagrams, indexed 
     # by i for the ith vector along the rotation rate axis, and by j along 
     # the jth age axis. Each Hess diagram is normalized to sum to one.
-    vvc_range = np.arange(0.0, 0.7, 0.1)
+    vvc_range = np.arange(0.0, 1.0, 0.1)
     age_range = np.arange(8.5, 9.5, 0.02)
     vvc_pts = []
     for i, a_vvc in enumerate(vvc_range):
@@ -111,8 +113,8 @@ if __name__ == "__main__":
    
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
     # however many walkers, number of iterations:
-    nwalkers, nsteps = 256, 512 # 600, 2000
-    burn = -128
+    nwalkers, nsteps = 2048, 4096 # 600, 2000
+    burn = -1024
 
     #ndim, nwalkers, nsteps = 9, 20, 200
     #burn = -100
@@ -120,14 +122,14 @@ if __name__ == "__main__":
     # walkers initialized via uniform distribution centered on data mass, w/ +/- 1 range.
     pos = []
     for i in range(nwalkers):
-        posi = truths[:7] + np.random.uniform(-2, 2, 7)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
-        posi = np.append(posi, 9.0 + np.random.uniform(-0.4, 0.4, 1))
-        if ndim == 9:
+        posi = truths[:Nrot] + np.random.uniform(-2, 2, Nrot)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
+        posi = np.append(posi, 9.0 + np.random.uniform(-0.2, 0.2, 1))
+        if ndim == Nrot+2:
             posi = np.append(posi, 0.1 + np.random.uniform(-0.05, 0.05, 1))
 
         pos.append(posi)
 
-    lims = np.array([[truth - 2, truth + 2] for truth in truths[:7]]) # was log10(obs) +/- 2 dex
+    lims = np.array([[truth - 2, truth + 2] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
 
     print(truths)
     print(lin_truths)
@@ -139,7 +141,7 @@ if __name__ == "__main__":
     print("Running MCMC...")
     # run mcmc:
     print("Thinning chains...")
-    new_pos, sampler = burn_emcee(sampler, pos, [16, 32, 64, 128, 256])#, 128, 256, 512, 1024])
+    new_pos, sampler = burn_emcee(sampler, pos, [16, 32, 64, 128, 256, 512, 1024, 2048])#, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
 
@@ -189,15 +191,15 @@ if __name__ == "__main__":
 
     # plot of best solutions (weights) vs. v/vc:
     f,ax=plt.subplots(1,1,figsize=(16,9))
-    ax.errorbar(vvc_range, log_weights[:7], yerr=[log_err['lower'][:7], log_err['higher'][:7]], c='r', ls='--')
-    ax.plot(vvc_range, truths[:7], c='k')
+    ax.errorbar(vvc_range, log_weights[:Nrot], yerr=[log_err['lower'][:Nrot], log_err['higher'][:Nrot]], c='r', ls='--')
+    ax.plot(vvc_range, truths[:Nrot], c='k')
     ax.set_xlabel(r'$\Omega/\Omega_c$', size=24)
     ax.set_ylabel('log Best Weight', size=24)
     f.savefig(os.path.join(cmddir, svdir, 'soln_vs_vvc.png'))
 
     f,ax=plt.subplots(1,1,figsize=(16,9))
-    ax.errorbar(vvc_range, lin_weights[:7], yerr=[lin_err['lower'][:7], lin_err['higher'][:7]], c='r', ls='--')
-    ax.plot(vvc_range, lin_truths[:7], c='k')
+    ax.errorbar(vvc_range, lin_weights[:Nrot], yerr=[lin_err['lower'][:Nrot], lin_err['higher'][:Nrot]], c='r', ls='--')
+    ax.plot(vvc_range, lin_truths[:Nrot], c='k')
     ax.set_xlabel(r'$\Omega/\Omega_c$', size=24)
     ax.set_ylabel('Best Weight', size=24)
     f.savefig(os.path.join(cmddir, svdir, 'soln_vs_vvc_lin.png'))

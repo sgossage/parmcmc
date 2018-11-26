@@ -33,11 +33,12 @@ def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, s
     composite_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, 0.0, av, dmod))#, ymag='I')
     composite_cmd.cmd['Nsim'] = np.zeros(len(composite_cmd.cmd['Nsim']))
 
-    vvc_range = np.arange(0.0, 0.7, 0.1)
+    vvc_range = np.arange(0.0, 1.0, 0.1)
+    Nrot = len(vvc_range)
     age_range = np.arange(8.5, 9.5, 0.02)
-    mu = weights[7]
+    mu = weights[Nrot]
     try:
-        sigma = weights[8]
+        sigma = weights[Nrot+1]
     except IndexError:
         sigma = 0.0
 
@@ -52,7 +53,7 @@ def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, s
             # add each cmd (re-weighted by solutions) to the composite CMD model.
     #        composite_cmd.cmd['Nsim'] += a_cmd.cmd['Nsim']
 
-    vvcweights = weights[:7]    
+    vvcweights = weights[:Nrot]    
 
     composite_cmd.cmd['Nsim'] += np.sum((10**vvcweights[:, np.newaxis])*np.sum(ageweights[:,np.newaxis]*model, axis=1), axis=0)
 
@@ -79,7 +80,7 @@ def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, s
     iso00 = rmm.ISOCMD(round(float(logz), 2), 0.0, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
     iso00.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
-    iso06 = rmm.ISOCMD(round(float(logz), 2), 0.6, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+    iso06 = rmm.ISOCMD(round(float(logz), 2), 0.9, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
     iso06.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
     # (x, y), i.e., (color, red mag) points of each isochrone in a list:
@@ -123,8 +124,9 @@ def chain_plot(nwalkers, ndim, chain, cmddir, lims, svdir=None, truths=None, lin
 
     fig, axa = plt.subplots(ndim, 2, figsize=(10, 14), sharex=True)
     labels = [r"$\theta_0$", r"$\theta_1$", r"$\theta_2$", r"$\theta_3$", 
-              r"$\theta_4$", r"$\theta_5$", r"$\theta_6$", r"$\tau$", 
-              r"$\sigma_{\tau}$"]
+              r"$\theta_4$", r"$\theta_5$", r"$\theta_6$", r"$\theta_7$", 
+              r"$\theta_8$", r"$\theta_9$", r"$\tau$", r"$\sigma_{\tau}$"]
+
     cmap = plt.cm.viridis
 
     #for i in range(nwalkers):
@@ -147,7 +149,7 @@ def chain_plot(nwalkers, ndim, chain, cmddir, lims, svdir=None, truths=None, lin
             #    break
 
     majorFormatter = FuncFormatter(MyFormatter)
-    for ax in axa.T[:][1][:8]:
+    for ax in axa.T[:][1][:11]:
         ax.get_yaxis().set_major_formatter(majorFormatter)
 
     axa[-1][0].set_xlabel("step number")
@@ -184,8 +186,9 @@ def chain_plot(nwalkers, ndim, chain, cmddir, lims, svdir=None, truths=None, lin
             #else:
             #    break
 
+    # format ticks for all but the age std. deviation
     majorFormatter = FuncFormatter(MyFormatter)
-    for ax in axa.T[:][1][:8]:
+    for ax in axa.T[:][1][:11]:
         ax.get_yaxis().set_major_formatter(majorFormatter)
 
     axa[-1][0].set_xlabel("step number")
@@ -235,7 +238,8 @@ def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, log = True,
     various iterations throughout the algorithm's execution.
     """
 
-    vvcs = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+    vvcs = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+    Nrot = len(vvcs)
     # figure for the weights of randomly drawn walkers at various iterations, along with 
     # 50th percentile weights w/ shaded region for 84th and 16th percentiles, and 
     # the highest lnP weights drawn as a black line as well.
@@ -270,7 +274,7 @@ def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, log = True,
                 rand_weights = 10**rand_weights
 
             # plot the random walkers' weights:
-            ax.plot(vvcs, rand_weights[:7], c='b', alpha=0.3)
+            ax.plot(vvcs, rand_weights[:Nrot], c='b', alpha=0.3)
 
         except Exception as e:
             pass
@@ -282,26 +286,26 @@ def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, log = True,
 
     # plot the final 50th percentile weights as a red line; also use a filled region 
     # to indicate uncertainty:  
-    ax.errorbar(vvcs, weights[:7], yerr=[err['lower'][:7], err['higher'][:7]], c='r', ls=':')
-    ax.errorbar(vvcs, weights[:7] + err['higher'][:7], c='r', ls='--')
-    ax.errorbar(vvcs, weights[:7] - err['lower'][:7], c='r', ls='--')
-    ax.fill_between(vvcs, weights[:7] + err['higher'][:7], y2=weights[:7]-err['lower'][:7], color='r', alpha=0.2)
+    ax.errorbar(vvcs, weights[:Nrot], yerr=[err['lower'][:Nrot], err['higher'][:Nrot]], c='r', ls=':')
+    ax.errorbar(vvcs, weights[:Nrot] + err['higher'][:Nrot], c='r', ls='--')
+    ax.errorbar(vvcs, weights[:Nrot] - err['lower'][:Nrot], c='r', ls='--')
+    ax.fill_between(vvcs, weights[:Nrot] + err['higher'][:Nrot], y2=weights[:Nrot]-err['lower'][:Nrot], color='r', alpha=0.2)
 
     # plot the highest lnP weights as a black line as well on this figure:
     log_highlnP_weights = highlnP_weights
     lin_highlnP_weights = 10**highlnP_weights
 
     if truths is not None:
-        ax.plot(vvcs, truths[:7], c='k')
+        ax.plot(vvcs, truths[:Nrot], c='k')
 
     if log:
-        ax.plot(vvcs, log_highlnP_weights[:7], c='c')
+        ax.plot(vvcs, log_highlnP_weights[:Nrot], c='c')
         if svdir == None:
             f.savefig(os.path.join(cmddir, 'log_soln_random.png'))
         else:
             f.savefig(os.path.join(cmddir, svdir, 'log_soln_random.png'))
     else:
-        ax.plot(vvcs, lin_highlnP_weights[:7], c='c')
+        ax.plot(vvcs, lin_highlnP_weights[:Nrot], c='c')
         if svdir == None:
             f.savefig(os.path.join(cmddir, 'lin_soln_random.png'))
         else:

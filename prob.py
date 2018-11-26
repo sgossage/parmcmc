@@ -71,11 +71,12 @@ def lnprior(theta, obsmass, lims):
     space goes only from e.g., log Age = 8.5 to 9.5).
 
     """
+    Nrot = 10
 
-    a0,a1,a2,a3,a4,a5,a6 = theta[:7]
-    mu = theta[7]
-    if len(theta) == 9:
-        sigma = theta[8]
+    a0,a1,a2,a3,a4,a5,a6,a7,a8,a9 = theta[:Nrot]
+    mu = theta[Nrot]
+    if len(theta) == Nrot+2:
+        sigma = theta[Nrot+1]
         if sigma < 0.02 or sigma > 1.0:
             return -np.inf
     else:
@@ -89,8 +90,8 @@ def lnprior(theta, obsmass, lims):
     # flat prior, 0 if outside valid parameter range, or 1 if w/i valid range. 
     # (Recalculated for log-prob accordingly.)
     if inrange(a0, lims[0]) and inrange(a1, lims[1]) and inrange(a2, lims[2]) and inrange(a3, lims[3]) \
-       and inrange(a4, lims[4]) and inrange(a5, lims[5]) and inrange(a6, lims[6]) and mu < 9.5 and \
-       mu > 8.5:
+       and inrange(a4, lims[4]) and inrange(a5, lims[5]) and inrange(a6, lims[6]) and \
+       inrange(a7, lims[7]) and inrange(a8, lims[8]) and inrange(a9, lims[9]) and mu < 9.5 and mu > 8.5:
 
         return 0.0
 
@@ -110,13 +111,14 @@ def lnprob(theta, obs, model, lims):
     likelihood calculation and evaluated.
     """
     #start = time.time()
+    Nrot = 10
 
     # current weights:
     #a0,a1,a2,a3,a4,a5,a6, mu, sigma = theta[]
-    weights = theta[:7]#np.array([a0,a1,a2,a3,a4,a5,a6])
-    mu = theta[7]
-    if len(theta) == 9:
-        sigma = theta[8]
+    weights = theta[:Nrot]#np.array([a0,a1,a2,a3,a4,a5,a6])
+    mu = theta[Nrot]
+    if len(theta) == Nrot+2:
+        sigma = theta[Nrot+1]
     else:
         sigma = 0.0
 
@@ -183,19 +185,19 @@ def get_results(samples):
     # mu = mean of age spread gaussian
     # s = std. deviation of age spread gaussian
     try:
-        t0, t1, t2, t3, t4, t5, t6, mu, s = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
-                                               zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
-                                               axis=0)))
+        t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu, s = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
+                                                        zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
+                                                        axis=0)))
         # percentiles gathered into an array:
-        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, mu, s])
+        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu, s])
     except ValueError:
-        t0, t1, t2, t3, t4, t5, t6, mu = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
-                                               zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
-                                               axis=0)))
+        t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
+                                                     zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
+                                                     axis=0)))
 
 
         # percentiles gathered into an array:
-        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, mu])
+        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu])
 
     # weights found at 50th percentile:
     log_weights = np.array([x[0] for x in percentiles])
@@ -248,7 +250,7 @@ def genmod_agespread(cmddir, mass, agemu, agesig):
 
 def genmod_vvcspread(cmddir, age, mass, vvcmu, vvcsig):
 
-    vvcs = np.arange(0.0, 0.7, 0.1)
+    vvcs = np.arange(0.0, 1.0, 0.1)
     mu, sig = 0.3, 0.05
     vvcweights = gen_gaussweights(vvcs, vvcmu, vvcsig)
 
@@ -285,7 +287,7 @@ def genmod_agevvcspread(cmddir, mass, agemu, agesig, vvcmu, vvcsig):
     #mu, sig = 9.00, 0.3
     ageweights = gen_gaussweights(ages, agemu, agesig)
 
-    vvcs = np.arange(0.0, 0.7, 0.1)
+    vvcs = np.arange(0.0, 1.0, 0.1)
     #mu, sig = 0.3, 0.2
     vvcweights = gen_gaussweights(vvcs, vvcmu, vvcsig)
 
