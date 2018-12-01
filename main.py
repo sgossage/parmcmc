@@ -27,6 +27,9 @@ import fileio as fio
 
 if __name__ == "__main__":
 
+#=================================================================================================================================
+# Initialization
+
     print("Getting files...")
 
     photbase = sys.argv[1].split('/')[1]
@@ -36,7 +39,7 @@ if __name__ == "__main__":
     
     # these should be made into dynamix inputs. 0.00, "gauss", "-0.30", "gauss", "0.0", "0.00", "Tycho_B", "Tycho_V"
     #bf, age, logz, vvc, av, dmod, vfilter, ifilter = "0.25", "gauss", "-0.30", "gauss", "0.16", "18.37", "UVIS475W", "UVIS814W"
-    age, vvc = "gauss", "gauss"
+    age, vvc = 9.20, "gauss"
     cmddir = sys.argv[1]
     # number of cpus, for multiprocessing:
     ncpu = int(sys.argv[2])
@@ -50,13 +53,16 @@ if __name__ == "__main__":
               0.4: 1e-2, 0.5: 1e-2, 0.6: 1e-2, 0.7: 1e-2,
               0.8: 1e-2, 0.9: 1e-2}
 
+#=================================================================================================================================
+# Model generation for mock data, or else assigning "observations" to the given observed data.
+# Truths are set here as well.
+
     # generate specified model or get specified Hess:
     agemu = 9.00
     agesig = 0.3
     vvcmu = 0.3
     vvcsig = 0.2
     Nrot = 10
-
     if mode == "mock":
         if vvc is not "gauss":
             if age is not "gauss":
@@ -71,6 +77,9 @@ if __name__ == "__main__":
                 obs, truths = pr.genmod_vvcspread(cmddir, age, mass=1e6, vvcmu=vvcmu, vvcsig=vvcsig)        
             else:
                 obs, truths = pr.genmod_agevvcspread(cmddir, mass=1e6, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig)
+
+    # or else just use the observed Hess diagram values; don't create a model.
+    # truth is "unknown" here for the vvc weights; each is set to the total observed counts.
     elif mode == "obs":
         obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
         obs = obscmd.cmd['Nobs']
@@ -88,6 +97,9 @@ if __name__ == "__main__":
         truths = np.append(truths, [agemu, agesig])
         lin_truths = np.append(lin_truths, [10**agemu, 10**agesig])
         ndim = Nrot + 2
+
+#=================================================================================================================================
+# Build grid of models from which emcee will draw to do the data-model fit.
 
     # form the array of models spanning age and v/vc grid space:
     # structure is an NxM dimensional matrix of Hess diagrams, indexed 
@@ -110,7 +122,10 @@ if __name__ == "__main__":
         vvc_pts.append(np.array(age_vector))
 
     model = np.array(vvc_pts)
-   
+
+#=================================================================================================================================
+# Perform MCMC algorithm to attain best-fit parameters.
+
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
     # however many walkers, number of iterations:
     nwalkers, nsteps = 2048, 4096 # 600, 2000
@@ -129,6 +144,7 @@ if __name__ == "__main__":
 
         pos.append(posi)
 
+    # prior limits for v/vc weights
     lims = np.array([[truth - 2, truth + 2] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
 
     print(truths)
@@ -144,6 +160,9 @@ if __name__ == "__main__":
     new_pos, sampler = burn_emcee(sampler, pos, [16, 32, 64, 128, 256, 512, 1024, 2048])#, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
+
+#=================================================================================================================================
+# Plot the results.
 
     print("Plotting results...")
     gfx.chain_plot(nwalkers, ndim, sampler.chain, cmddir = cmddir, lims=lims, svdir=svdir, truths=truths, lintruths=lin_truths, burn=burn)
@@ -216,5 +235,7 @@ if __name__ == "__main__":
                 X=np.c_[row_names, log_highlnP_weights, log_weights, log_err['higher'], log_err['lower']], delimiter='\t',fmt="%s", header="MAP\t50th Percentile\t+err\t-err")
     np.savetxt(os.path.join(cmddir, svdir, 'lin_solutions.txt'),
                 X=np.c_[row_names, lin_highlnP_weights, lin_weights, lin_err['higher'], lin_err['lower']], delimiter='\t',fmt="%s", header="MAP\t50th Percentile\t+err\t-err")
+
+#=================================================================================================================================
 
     print("DONE")
