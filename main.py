@@ -241,16 +241,16 @@ if __name__ == "__main__":
     gfx.chain_plot(nwalkers, ndim, sampler, cmddir = cmddir, vvclim=vvclim, svdir=svdir, truths=truths, lintruths=lin_truths, burn=burn)
 
     # plot ln P of full model:
-    fig, ax = plt.subplots(1, figsize=(10,7))
-    for i in range(nwalkers):
-        ax.plot(sampler.lnprobability[i, burn:])
+    #fig, ax = plt.subplots(1, figsize=(10,7))
+    #for i in range(nwalkers):
+    #    ax.plot(sampler.lnprobability[i, burn:])
 
-    ax.set_xlabel("Step Number")
-    ax.set_ylabel("ln P")
+    #ax.set_xlabel("Step Number")
+    #ax.set_ylabel("ln P")
 
-    plt.tight_layout()
+    #plt.tight_layout()
 
-    plt.savefig(os.path.join(cmddir, svdir, 'chains_lnP.png'))
+    #plt.savefig(os.path.join(cmddir, svdir, 'chains_lnP.png'))
 
     # plot ln P of full model:
     #fig, ax = plt.subplots(1, figsize=(10,7))
