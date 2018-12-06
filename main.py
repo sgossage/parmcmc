@@ -14,6 +14,8 @@ import seaborn as sns
 from match.scripts import cmd
 from match.MISTscripts.plotruns import *
 from reinit_emcee import *
+from gausweight import *
+from random import gammavariate
 
 import graphics as gfx
 import prob as pr
@@ -39,7 +41,7 @@ if __name__ == "__main__":
     
     # these should be made into dynamix inputs. 0.00, "gauss", "-0.30", "gauss", "0.0", "0.00", "Tycho_B", "Tycho_V"
     #bf, age, logz, vvc, av, dmod, vfilter, ifilter = "0.25", "gauss", "-0.30", "gauss", "0.16", "18.37", "UVIS475W", "UVIS814W"
-    age, vvc = 9.20, "gauss"
+    age, vvc = "gauss", "gauss"
     cmddir = sys.argv[1]
     # number of cpus, for multiprocessing:
     ncpu = int(sys.argv[2])
@@ -49,9 +51,9 @@ if __name__ == "__main__":
     ifilter = sys.argv[6]
     filters = [vfilter, ifilter]    
 
-    truths = {0.0: 1e-2, 0.1: 1e-2, 0.2: 1e-2, 0.3: 1e-2, 
-              0.4: 1e-2, 0.5: 1e-2, 0.6: 1e-2, 0.7: 1e-2,
-              0.8: 1e-2, 0.9: 1e-2}
+    #truths = {0.0: 1e-2, 0.1: 1e-2, 0.2: 1e-2, 0.3: 1e-2, 
+    #          0.4: 1e-2, 0.5: 1e-2, 0.6: 1e-2, 0.7: 1e-2,
+    #          0.8: 1e-2, 0.9: 1e-2}
 
 #=================================================================================================================================
 # Model generation for mock data, or else assigning "observations" to the given observed data.
@@ -62,21 +64,28 @@ if __name__ == "__main__":
     agesig = 0.3
     vvcmu = 0.3
     vvcsig = 0.2
-    Nrot = 10
+    Nrot = 7
+    vvclim = round(Nrot / 10.0, 1)
+    vvc_range = np.arange(0.0, vvclim, 0.1)
+    age_range = np.arange(8.5, 9.5, 0.02)
+    truths = {rot:1e-2 for rot in vvc_range}
+
     if mode == "mock":
         if vvc is not "gauss":
             if age is not "gauss":
                 obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
                 obs = obscmd.cmd['Nsim']
             else:
-                obs = pr.genmod_agespread(cmddir, mass=1e6, agemu=agemu, agesig=agesig)
+                obs = pr.genmod_agespread(cmddir, mass=1e6, agemu=agemu, agesig=agesig, vvclim=vvclim)
 
             truths[round(float(vvc), 1)] = np.sum(obs)
         else:
             if age is not "gauss":
-                obs, truths = pr.genmod_vvcspread(cmddir, age, mass=1e6, vvcmu=vvcmu, vvcsig=vvcsig)        
+                obs, truths = pr.genmod_vvcspread(cmddir, age, mass=1e6, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
             else:
-                obs, truths = pr.genmod_agevvcspread(cmddir, mass=1e6, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig)
+                obs, truths = pr.genmod_agevvcspread(cmddir, mass=1e6, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)
+
+        obsweight = 1e6
 
     # or else just use the observed Hess diagram values; don't create a model.
     # truth is "unknown" here for the vvc weights; each is set to the total observed counts.
@@ -105,8 +114,6 @@ if __name__ == "__main__":
     # structure is an NxM dimensional matrix of Hess diagrams, indexed 
     # by i for the ith vector along the rotation rate axis, and by j along 
     # the jth age axis. Each Hess diagram is normalized to sum to one.
-    vvc_range = np.arange(0.0, 1.0, 0.1)
-    age_range = np.arange(8.5, 9.5, 0.02)
     vvc_pts = []
     for i, a_vvc in enumerate(vvc_range):
         # step through in age, adding an age vector at each point in v/vc space
@@ -128,28 +135,94 @@ if __name__ == "__main__":
 
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
     # however many walkers, number of iterations:
-    nwalkers, nsteps = 2048, 4096 # 600, 2000
-    burn = -1024
+    nwalkers, nsteps = 256, 512 # 600, 2000
+    burn = -int(nsteps/2)
 
     #ndim, nwalkers, nsteps = 9, 20, 200
     #burn = -100
 
     # walkers initialized via uniform distribution centered on data mass, w/ +/- 1 range.
+    # Need a better way to initialize walkers...try setting them up on hyperplane of solutions.
+    #age_range = np.arange(8.5,9.5,0.02)
+    #age_posi = np.array([])
+    #agesig_posi = np.array([])
+    #rotw = np.array([])
+    #y = obs
+    #for i in range(nwalkers):
+    #    age_posi = np.append(age_posi, 9.0 + np.random.uniform(-0.2, 0.2, 1))
+        
+    #    if ndim == Nrot+2:
+    #        agesig_posi = np.append(agesig_posi, 0.1 + np.random.uniform(-0.05, 0.05, 1))
+    #        ageweights = gen_gaussweights(age_range, age_posi[i], agesig_posi[i])
+    #    else:
+    #        ageweights = gen_gaussweights(age_range, age_posi[i], sigma)
+
+    #    beta = np.array([-1.]*7)
+    #    #print(y.shape)
+    #    while not all(beta > 0.0):
+    #        X = np.sum(ageweights[:,np.newaxis]*model, axis=1)
+            #print(X.shape)
+    #        X += np.random.uniform(0,0.25,X.shape)
+    #        X = X.T
+            #print(X.shape)
+    #        XTXinv = np.linalg.inv(np.matmul(X.T, X))
+            #print(XTXinv.shape)
+    #        XTXinvXT = np.matmul(XTXinv, X.T)
+            #print(XTXinvXT.T.shape)
+    #        XTXinvXTy = np.matmul(XTXinvXT, y)
+    #        beta = XTXinvXTy
+    #    beta = np.log10(beta)
+    #    if i == 0:
+    #        rotw = beta
+    #    else:
+    #        rotw = np.vstack((rotw, beta))
+    #print(beta.shape)
+    #print(rotw.shape)
+    #print(model.shape)
+    #print(X.shape)
+    #print(beta)
+    #print(all(beta > 0.0))
+    #print(np.log10(beta))
+    #print(beta.shape)
+    #print(np.sum(X*beta))
+    #print(np.sum(y))
+    #sys.exit()
+
+    rotw = np.array([])
+    sample = np.array([-1.]*Nrot) 
+    for i in range(nwalkers):
+        while not ((all(sample > obsweight/10.)) & (all(sample < obsweight))):
+            params = np.ones(Nrot)
+            sample = np.array([gammavariate(a,1) for a in params])
+            sample = np.array([v/sum(sample) for v in sample])
+            sample = sample*obsweight
+        if (i == 0):
+                rotw = np.log10(sample)
+        else:
+            rotw = np.vstack((rotw, np.log10(sample)))
+
     pos = []
     for i in range(nwalkers):
-        posi = truths[:Nrot] + np.random.uniform(-2, 2, Nrot)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
-        posi = np.append(posi, 9.0 + np.random.uniform(-0.2, 0.2, 1))
+        posi = rotw[i]
+        #posi = truths[:Nrot] + np.random.uniform(-1, 1, Nrot)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
+        #posi = np.append(posi, age_posi[i])#
+        posi = np.append(posi, 9.0 + np.random.uniform(-0.1, 0.1, 1))
         if ndim == Nrot+2:
+            #posi = np.append(posi, agesig_posi[i])
             posi = np.append(posi, 0.1 + np.random.uniform(-0.05, 0.05, 1))
 
         pos.append(posi)
+    print(pos[0])
 
     # prior limits for v/vc weights
-    lims = np.array([[truth - 2, truth + 2] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
+    lims = np.array([[0, np.log10(obsweight)+1] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
 
     print(truths)
     print(lin_truths)
     print(lims)
+    print(len(lims))
+    print(ndim)
+    #sys.exit()
 
     # the affine-invariant emcee sampler:
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, kwargs = {"obs":obs, "model":model, "lims":lims}, threads=ncpu)
@@ -157,7 +230,7 @@ if __name__ == "__main__":
     print("Running MCMC...")
     # run mcmc:
     print("Thinning chains...")
-    new_pos, sampler = burn_emcee(sampler, pos, [16, 32, 64, 128, 256, 512, 1024, 2048])#, 128, 256, 512, 1024])
+    new_pos, sampler = burn_emcee(sampler, pos, [16,32,64,128])#16, 32, 64, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
 
@@ -165,7 +238,7 @@ if __name__ == "__main__":
 # Plot the results.
 
     print("Plotting results...")
-    gfx.chain_plot(nwalkers, ndim, sampler.chain, cmddir = cmddir, lims=lims, svdir=svdir, truths=truths, lintruths=lin_truths, burn=burn)
+    gfx.chain_plot(nwalkers, ndim, sampler, cmddir = cmddir, vvclim=vvclim, svdir=svdir, truths=truths, lintruths=lin_truths, burn=burn)
 
     # plot ln P of full model:
     fig, ax = plt.subplots(1, figsize=(10,7))
@@ -210,6 +283,11 @@ if __name__ == "__main__":
 
     # plot of best solutions (weights) vs. v/vc:
     f,ax=plt.subplots(1,1,figsize=(16,9))
+    
+    print(log_weights[:Nrot])
+    print(log_err['lower'][:Nrot])
+    print(log_err['higher'][:Nrot])
+
     ax.errorbar(vvc_range, log_weights[:Nrot], yerr=[log_err['lower'][:Nrot], log_err['higher'][:Nrot]], c='r', ls='--')
     ax.plot(vvc_range, truths[:Nrot], c='k')
     ax.set_xlabel(r'$\Omega/\Omega_c$', size=24)
@@ -224,9 +302,9 @@ if __name__ == "__main__":
     f.savefig(os.path.join(cmddir, svdir, 'soln_vs_vvc_lin.png'))
 
     # do pg style plots using final 50th percentile weights:
-    gfx.pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, log_weights, filters, svdir=svdir)
-    _ = gfx.plot_random_weights(sampler, nsteps, ndim, log_weights, log_err, cmddir, log=True, svdir=svdir, truths=truths, burn=burn)
-    log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, log=False, svdir=svdir, truths=lin_truths, burn=burn)
+    gfx.pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, log_weights, filters, svdir=svdir)
+    _ = gfx.plot_random_weights(sampler, nsteps, ndim, log_weights, log_err, cmddir, vvclim, log=True, svdir=svdir, truths=truths, burn=burn)
+    log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, vvclim, log=False, svdir=svdir, truths=lin_truths, burn=burn)
 
     row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","age"])
     if ndim == 9:

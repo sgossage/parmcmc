@@ -21,10 +21,10 @@ def MyFormatter(x,lim):
         x = abs(x)
         return '-{0}e{1}'.format(x/10**np.floor(np.log10(x)),int(np.log10(x)))
     elif x > 0:
-        return '{0}e{1}'.format(x/10**np.floor(np.log10(x)),int(np.log10(x)))
+        return '{0}e{1}'.format(round(x/10**np.floor(np.log10(x)),3),int(np.log10(x)))
 
 # This does a pg style plot of the models and data, given a set of weights for the models:
-def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, svname=None, log=False, svdir=None):
+def pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, weights, filters, svname=None, log=False, svdir=None):
 
     """
         Creates a MATCH pg style plot of data, model, data-model, and -2lnP map.
@@ -33,7 +33,7 @@ def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, s
     composite_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, 0.0, av, dmod))#, ymag='I')
     composite_cmd.cmd['Nsim'] = np.zeros(len(composite_cmd.cmd['Nsim']))
 
-    vvc_range = np.arange(0.0, 1.0, 0.1)
+    vvc_range = np.arange(0.0, vvclim, 0.1)
     Nrot = len(vvc_range)
     age_range = np.arange(8.5, 9.5, 0.02)
     mu = weights[Nrot]
@@ -77,10 +77,10 @@ def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, s
 
     color_name = "{:s}-{:s}".format(bluemag_name, redmag_name)
 
-    iso00 = rmm.ISOCMD(round(float(logz), 2), 0.0, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+    iso00 = rmm.ISOCMD(round(float(logz), 2), min(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
     iso00.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
-    iso06 = rmm.ISOCMD(round(float(logz), 2), 0.9, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+    iso06 = rmm.ISOCMD(round(float(logz), 2), max(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
     iso06.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
     # (x, y), i.e., (color, red mag) points of each isochrone in a list:
@@ -116,31 +116,45 @@ def pgplot(obs, model, cmddir, bf, age, logz, vvc, av, dmod, weights, filters, s
 
     return
 
-def chain_plot(nwalkers, ndim, chain, cmddir, lims, svdir=None, truths=None, lintruths=None, burn=-1000):
+def chain_plot(nwalkers, ndim, sampler, cmddir, vvclim, svdir=None, truths=None, lintruths=None, burn=-1000):
 
     """
         Plots our MCMC chains.
     """
 
-    fig, axa = plt.subplots(ndim, 2, figsize=(10, 14), sharex=True)
-    labels = [r"$\theta_0$", r"$\theta_1$", r"$\theta_2$", r"$\theta_3$", 
-              r"$\theta_4$", r"$\theta_5$", r"$\theta_6$", r"$\theta_7$", 
-              r"$\theta_8$", r"$\theta_9$", r"$\tau$", r"$\sigma_{\tau}$"]
+    chain = sampler.chain
 
+    fig, axa = plt.subplots(1+ndim, 2, figsize=(10, 14), sharex=True)
+    labels = ["ln P"]
+    vvclabels = [r"$\theta_0$", r"$\theta_1$", r"$\theta_2$", r"$\theta_3$", 
+                 r"$\theta_4$", r"$\theta_5$", r"$\theta_6$", r"$\theta_7$",
+                 r"$\theta_8$", r"\theta_9"]
+    vvcs = np.arange(0.0, vvclim, 0.1)
+    for i in range(int(vvclim*10)):
+        labels += [vvclabels[i]]
+    
+    labels += [r"$\tau$", r"$\sigma_{\tau}$"]
+    
+    steps = np.array([range(np.shape(chain)[1])]*nwalkers).flatten()
     cmap = plt.cm.viridis
 
     #for i in range(nwalkers):
+    axa.T[:][0][0].hist2d(steps, sampler.lnprobability[:, :].flatten(), bins=64, cmap=cmap)
+    axa.T[:][1][0].hist2d(steps, np.exp(sampler.lnprobability[:, :]).flatten(), bins=64, cmap=cmap)
+    axa.T[:][0][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')
+    axa.T[:][1][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')
+    axa.T[:][0][0].set_ylabel(labels[0])
     for j in range(ndim):
             # only plot every 100th walker:
             #if not i % 10:
-        logax = axa.T[:][0][j]
-        linax = axa.T[:][1][j]
-        steps = np.array([range(np.shape(chain)[1])]*nwalkers).flatten()
+        logax = axa.T[:][0][1+j]
+        linax = axa.T[:][1][1+j]
+
         logax.hist2d(steps, chain[:, :, j].flatten(), bins = 64, cmap = cmap)
         linax.hist2d(steps, (10**chain[:, :, j]).flatten(), bins = 64, cmap = cmap)
         #logax.plot(chain[i, :, j], alpha=0.4)
         #linax.plot(10**chain[i, :, j], alpha=0.4)
-        logax.set_ylabel(labels[j])
+        logax.set_ylabel(labels[1+j])
         logax.axvline(x=np.shape(chain)[1]-1 + burn, c='r')
         linax.axvline(x=np.shape(chain)[1]-1 + burn, c='r')
         logax.axhline(y=truths[j], c='r', ls='--')
@@ -149,7 +163,7 @@ def chain_plot(nwalkers, ndim, chain, cmddir, lims, svdir=None, truths=None, lin
             #    break
 
     majorFormatter = FuncFormatter(MyFormatter)
-    for ax in axa.T[:][1][:11]:
+    for ax in axa.T[:][1][:]:
         ax.get_yaxis().set_major_formatter(majorFormatter)
 
     axa[-1][0].set_xlabel("step number")
@@ -165,30 +179,34 @@ def chain_plot(nwalkers, ndim, chain, cmddir, lims, svdir=None, truths=None, lin
     else:
         plt.savefig(os.path.join(cmddir, svdir, "chains_heatmap.png"))
 
-    fig, axa = plt.subplots(ndim, 2, figsize=(10, 14), sharex=True)
+    fig, axa = plt.subplots(1+ndim, 2, figsize=(10, 14), sharex=True)
 
     for i in range(nwalkers):
+        axa.T[:][0][0].plot(sampler.lnprobability[i, :])
+        axa.T[:][1][0].plot(np.exp(sampler.lnprobability[i, :]))
         for j in range(ndim):
             # only plot every 100th walker:
             #if not i % 10:
-            logax = axa.T[:][0][j]
-            linax = axa.T[:][1][j]
+            logax = axa.T[:][0][1+j]
+            linax = axa.T[:][1][1+j]
             #logax.hist2d(range(len(chain[i, :, j])), chain[i, :, j], bins = 50)
             #linax.hist2d(range(len(chain[i, :, j])), 10**chain[i, :, j], bins=50 )
             logax.plot(chain[i, :, j], alpha=0.4)
             linax.plot(10**chain[i, :, j], alpha=0.4)
-            logax
-            logax.set_ylabel(labels[j])
-            logax.axvline(x=len(chain[i,:,j]) - len(chain[i,burn:,j]), c='k')
-            linax.axvline(x=len(chain[i,:,j]) - len(chain[i,burn:,j]), c='k')
-            logax.axhline(y=truths[j], c='r', ls='--')
-            linax.axhline(y=lintruths[j], c='r', ls='--')
+            logax.set_ylabel(labels[1+j])
+            logax.axvline(x=np.shape(chain)[1]-1 + burn, c='k')
+            linax.axvline(x=np.shape(chain)[1]-1 + burn, c='k')
+            logax.axhline(y=truths[j], c='k', ls='--')
+            linax.axhline(y=lintruths[j], c='k', ls='--')
             #else:
             #    break
+    axa.T[:][0][0].axvline(x=np.shape(chain)[1]-1 + burn, c='k')
+    axa.T[:][1][0].axvline(x=np.shape(chain)[1]-1 + burn, c='k')
+    axa.T[:][0][0].set_ylabel(labels[0])
 
     # format ticks for all but the age std. deviation
     majorFormatter = FuncFormatter(MyFormatter)
-    for ax in axa.T[:][1][:11]:
+    for ax in axa.T[:][1][:]:
         ax.get_yaxis().set_major_formatter(majorFormatter)
 
     axa[-1][0].set_xlabel("step number")
@@ -231,14 +249,14 @@ def chain_plot(nwalkers, ndim, chain, cmddir, lims, svdir=None, truths=None, lin
     return
 
 
-def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, log = True, svdir=None, truths=None, burn=-1000):
+def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, vvclim, log = True, svdir=None, truths=None, burn=-1000):
 
     """
         Creates a plot of our weights during the MCMC run, sampled from random walkers at 
     various iterations throughout the algorithm's execution.
     """
 
-    vvcs = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+    vvcs = np.arange(0.0, vvclim, 0.1)
     Nrot = len(vvcs)
     # figure for the weights of randomly drawn walkers at various iterations, along with 
     # 50th percentile weights w/ shaded region for 84th and 16th percentiles, and 

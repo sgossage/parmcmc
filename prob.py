@@ -71,17 +71,27 @@ def lnprior(theta, obsmass, lims):
     space goes only from e.g., log Age = 8.5 to 9.5).
 
     """
-    Nrot = 10
+    #a0,a1,a2,a3,a4,a5,a6,a7,a8,a9 = theta[:Nrot]
 
-    a0,a1,a2,a3,a4,a5,a6,a7,a8,a9 = theta[:Nrot]
-    mu = theta[Nrot]
+
+    #mu = theta[Nrot]
+    Nrot = len(lims)
     if len(theta) == Nrot+2:
         sigma = theta[Nrot+1]
+        mu = theta[Nrot]
+        rot_weights = theta[:Nrot]
         if sigma < 0.02 or sigma > 1.0:
             return -np.inf
     else:
         sigma = 0.0
-    
+        mu = theta[Nrot]
+        rot_weights = theta[:Nrot]
+
+    for i, weight in enumerate(rot_weights):
+        if inrange(weight, lims[i]):
+            pass
+        else:
+            return -np.inf
     #if (np.sum(theta[:7]) <= obsmass):
     #    valid = True
     #else:
@@ -89,10 +99,10 @@ def lnprior(theta, obsmass, lims):
 
     # flat prior, 0 if outside valid parameter range, or 1 if w/i valid range. 
     # (Recalculated for log-prob accordingly.)
-    if inrange(a0, lims[0]) and inrange(a1, lims[1]) and inrange(a2, lims[2]) and inrange(a3, lims[3]) \
-       and inrange(a4, lims[4]) and inrange(a5, lims[5]) and inrange(a6, lims[6]) and \
-       inrange(a7, lims[7]) and inrange(a8, lims[8]) and inrange(a9, lims[9]) and mu < 9.5 and mu > 8.5:
-
+    #if inrange(a0, lims[0]) and inrange(a1, lims[1]) and inrange(a2, lims[2]) and inrange(a3, lims[3]) \
+    #   and inrange(a4, lims[4]) and inrange(a5, lims[5]) and inrange(a6, lims[6]) and \
+    #   inrange(a7, lims[7]) and inrange(a8, lims[8]) and inrange(a9, lims[9]) and mu < 9.5 and mu > 8.5:
+    if mu < 9.5 and mu > 8.5:
         return 0.0
 
     return -np.inf
@@ -111,7 +121,7 @@ def lnprob(theta, obs, model, lims):
     likelihood calculation and evaluated.
     """
     #start = time.time()
-    Nrot = 10
+    Nrot = len(lims)
 
     # current weights:
     #a0,a1,a2,a3,a4,a5,a6, mu, sigma = theta[]
@@ -184,20 +194,27 @@ def get_results(samples):
     # tX = various v/vc weights
     # mu = mean of age spread gaussian
     # s = std. deviation of age spread gaussian
-    try:
-        t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu, s = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
+    #try:
+    #t0, t1, t2, t3, t4, t5, t6, mu, s 
+    params = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
                                                         zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
                                                         axis=0)))
+    params = list(params)
+
+    print(params)
+    #print(list(params)[0])
+
         # percentiles gathered into an array:
-        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu, s])
-    except ValueError:
-        t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
-                                                     zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
-                                                     axis=0)))
+    #percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, mu, s])
+    percentiles = np.array(params)
+    #except ValueError:
+    #    t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]), 
+    #                                                 zip(*scipy.stats.scoreatpercentile(samples, [16, 50, 84], 
+    #                                                 axis=0)))
 
 
         # percentiles gathered into an array:
-        percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu])
+    #    percentiles = np.array([t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, mu])
 
     # weights found at 50th percentile:
     log_weights = np.array([x[0] for x in percentiles])
@@ -248,9 +265,9 @@ def genmod_agespread(cmddir, mass, agemu, agesig):
 
     return mass*composite_hess
 
-def genmod_vvcspread(cmddir, age, mass, vvcmu, vvcsig):
+def genmod_vvcspread(cmddir, age, mass, vvcmu, vvcsig, vvclim):
 
-    vvcs = np.arange(0.0, 1.0, 0.1)
+    vvcs = np.arange(0.0, vvclim, 0.1)
     mu, sig = 0.3, 0.05
     vvcweights = gen_gaussweights(vvcs, vvcmu, vvcsig)
 
@@ -281,13 +298,13 @@ def genmod_vvcspread(cmddir, age, mass, vvcmu, vvcsig):
 
     return mass*composite_hess, truths
 
-def genmod_agevvcspread(cmddir, mass, agemu, agesig, vvcmu, vvcsig):
+def genmod_agevvcspread(cmddir, mass, agemu, agesig, vvcmu, vvcsig, vvclim):
 
     ages = np.arange(8.50, 9.50, 0.02)
     #mu, sig = 9.00, 0.3
     ageweights = gen_gaussweights(ages, agemu, agesig)
 
-    vvcs = np.arange(0.0, 1.0, 0.1)
+    vvcs = np.arange(0.0, vvclim, 0.1)
     #mu, sig = 0.3, 0.2
     vvcweights = gen_gaussweights(vvcs, vvcmu, vvcsig)
 
