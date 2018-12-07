@@ -227,9 +227,9 @@ def chain_plot(nwalkers, ndim, sampler, cmddir, vvclim, svdir=None, truths=None,
 
     # corner plot of marginalized probability distributions for ea. parameter:
     if lintruths is None:
-        fig = corner.corner(10**samples, labels=labels, quantiles=[0.16,0.5,0.84])
+        fig = corner.corner(10**samples, labels=labels[1:], quantiles=[0.16,0.5,0.84])
     else:
-        fig = corner.corner(10**samples, labels=labels, quantiles=[0.16,0.5,0.84], truths=lintruths)
+        fig = corner.corner(10**samples, labels=labels[1:], quantiles=[0.16,0.5,0.84], truths=lintruths)
 
     if svdir == None:
         fig.savefig(os.path.join(cmddir, 'affine_invariant_triangle1_lin.png'))
@@ -237,9 +237,9 @@ def chain_plot(nwalkers, ndim, sampler, cmddir, vvclim, svdir=None, truths=None,
         fig.savefig(os.path.join(cmddir, svdir, 'affine_invariant_triangle1_lin.png'))
 
     if truths is None:
-        fig = corner.corner(samples, labels=labels, quantiles=[0.16,0.5,0.84])
+        fig = corner.corner(samples, labels=labels[1:], quantiles=[0.16,0.5,0.84])
     else:
-        fig = corner.corner(samples, labels=labels, quantiles=[0.16,0.5,0.84], truths=truths)
+        fig = corner.corner(samples, labels=labels[1:], quantiles=[0.16,0.5,0.84], truths=truths)
 
     if svdir == None:
         fig.savefig(os.path.join(cmddir, 'affine_invariant_triangle1.png'))
