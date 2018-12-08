@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
     # however many walkers, number of iterations:
-    nwalkers, nsteps = 256, 512 # 600, 2000
+    nwalkers, nsteps = 1024, 2048 # 600, 2000
     burn = -int(nsteps/2)
 
     #ndim, nwalkers, nsteps = 9, 20, 200
@@ -206,7 +206,7 @@ if __name__ == "__main__":
         posi = rotw[i]
         #posi = truths[:Nrot] + np.random.uniform(-1, 1, Nrot)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
         #posi = np.append(posi, age_posi[i])#
-        posi = np.append(posi, 9.0 + np.random.uniform(-0.1, 0.1, 1))
+        posi = np.append(posi, 9.0 + np.random.uniform(-0.2, 0.2, 1))
         if ndim == Nrot+2:
             #posi = np.append(posi, agesig_posi[i])
             posi = np.append(posi, 0.1 + np.random.uniform(-0.05, 0.05, 1))
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     print(pos[0])
 
     # prior limits for v/vc weights
-    lims = np.array([[0, np.log10(obsweight)+1] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
+    lims = np.array([[np.log10(obsweight*1e-5), np.log10(obsweight*1e2)] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
 
     print(truths)
     print(lin_truths)
@@ -230,7 +230,7 @@ if __name__ == "__main__":
     print("Running MCMC...")
     # run mcmc:
     print("Thinning chains...")
-    new_pos, sampler = burn_emcee(sampler, pos, [16,32,64,128])#16, 32, 64, 128, 256, 512, 1024])
+    new_pos, sampler = burn_emcee(sampler, pos, [16,32,64,128,256,512])#16, 32, 64, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
 
@@ -306,8 +306,8 @@ if __name__ == "__main__":
     _ = gfx.plot_random_weights(sampler, nsteps, ndim, log_weights, log_err, cmddir, vvclim, log=True, svdir=svdir, truths=truths, burn=burn)
     log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, vvclim, log=False, svdir=svdir, truths=lin_truths, burn=burn)
 
-    row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","age"])
-    if ndim == 9:
+    row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","t7","t8","t9","age"])
+    if ndim == Nrot+2:
         row_names = np.append(row_names, "age_sig")
     np.savetxt(os.path.join(cmddir, svdir, 'log_solutions.txt'),
                 X=np.c_[row_names, log_highlnP_weights, log_weights, log_err['higher'], log_err['lower']], delimiter='\t',fmt="%s", header="MAP\t50th Percentile\t+err\t-err")
