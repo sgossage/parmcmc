@@ -80,7 +80,12 @@ def pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, weights, filters
     iso00 = rmm.ISOCMD(round(float(logz), 2), min(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
     iso00.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
-    iso06 = rmm.ISOCMD(round(float(logz), 2), max(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+    # this try except is fudgy  -- onl needed cause v/vc = 0.6 models aren't available on my local machine.
+    try:
+        iso06 = rmm.ISOCMD(round(float(logz), 2), max(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+    except Exception as e:
+        iso06 = rmm.ISOCMD(round(float(logz), 2), 0.6, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+
     iso06.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
     # (x, y), i.e., (color, red mag) points of each isochrone in a list:
@@ -128,7 +133,7 @@ def chain_plot(nwalkers, ndim, sampler, cmddir, vvclim, svdir=None, truths=None,
     labels = ["ln P"]
     vvclabels = [r"$\theta_0$", r"$\theta_1$", r"$\theta_2$", r"$\theta_3$", 
                  r"$\theta_4$", r"$\theta_5$", r"$\theta_6$", r"$\theta_7$",
-                 r"$\theta_8$", r"\theta_9"]
+                 r"$\theta_8$", r"$\theta_9$"]
     vvcs = np.arange(0.0, vvclim, 0.1)
     for i in range(int(vvclim*10)):
         labels += [vvclabels[i]]
