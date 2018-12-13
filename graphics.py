@@ -77,29 +77,29 @@ def pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, weights, filters
 
     color_name = "{:s}-{:s}".format(bluemag_name, redmag_name)
 
-    iso00 = rmm.ISOCMD(round(float(logz), 2), min(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
-    iso00.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
+#    iso00 = rmm.ISOCMD(round(float(logz), 2), min(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+#    iso00.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
     # this try except is fudgy  -- onl needed cause v/vc = 0.6 models aren't available on my local machine.
-    try:
-        iso06 = rmm.ISOCMD(round(float(logz), 2), max(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
-    except Exception as e:
-        iso06 = rmm.ISOCMD(round(float(logz), 2), 0.6, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+#    try:
+#        iso06 = rmm.ISOCMD(round(float(logz), 2), max(vvc_range), ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
+#    except Exception as e:
+#        iso06 = rmm.ISOCMD(round(float(logz), 2), 0.6, ebv= round(float(av), 2)/3.1, photstr=photstr, exttag='TP')
 
-    iso06.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
+    #iso06.set_isodata(round(float(mu), 2), color_name, bluemag_name, dmod=round(float(dmod), 2))
 
     # (x, y), i.e., (color, red mag) points of each isochrone in a list:
-    mist_pts = [
-                isoget_colmags(iso00, [color_name, bluemag_name], lage=round(float(mu), 2), dmod=round(float(dmod), 2)),
-                isoget_colmags(iso06, [color_name, bluemag_name], lage=round(float(mu), 2), dmod=round(float(dmod), 2))
-               ]
+    #mist_pts = [
+    #            isoget_colmags(iso00, [color_name, bluemag_name], lage=round(float(mu), 2), dmod=round(float(dmod), 2)),
+    #            isoget_colmags(iso06, [color_name, bluemag_name], lage=round(float(mu), 2), dmod=round(float(dmod), 2))
+    #           ]
 
     # recalculate the d-m and signifigance hesses using the new hesses.
     composite_cmd.recalc()
 
     # create a MATCH pg style plot using the .cmd file:
     pgcmd_kwargs = {}
-    pgcmd_kwargs['mist_pts'] = mist_pts
+    #pgcmd_kwargs['mist_pts'] = mist_pts
     if svname == None:
         if svdir == None:
             pgcmd_kwargs['figname'] = os.path.join(cmddir, 'match_pgplot.png')

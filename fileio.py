@@ -1,5 +1,30 @@
 import glob
 import os
+import numpy as np
+from match.scripts import cmd
+
+def gather_models(cmddir, bf, age_range, logz, vvc_range, av, dmod):
+    # form the array of models spanning age and v/vc grid space:
+    # structure is an NxM dimensional matrix of Hess diagrams, indexed 
+    # by i for the ith vector along the rotation rate axis, and by j along 
+    # the jth age axis. Each Hess diagram is normalized to sum to one.
+    vvc_pts = []
+    for i, a_vvc in enumerate(vvc_range):
+        # step through in age, adding an age vector at each point in v/vc space
+        age_vector = [] 
+        for j, an_age in enumerate(age_range):
+
+            a_cmd = cmd.CMD(get_cmdf(cmddir, bf, an_age, logz, a_vvc, av, dmod))
+            model_hess = a_cmd.cmd['Nsim']
+            model_hess /= np.sum(model_hess)
+
+            age_vector.append(model_hess)
+
+        vvc_pts.append(np.array(age_vector))
+
+    model = np.array(vvc_pts)
+
+    return model
 
 def parse_fname(photfn, mode="float"):
 

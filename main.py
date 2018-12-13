@@ -64,7 +64,7 @@ if __name__ == "__main__":
     agesig = 0.3
     vvcmu = 0.3
     vvcsig = 0.2
-    Nrot = 7
+    Nrot = 10
     vvclim = round(Nrot / 10.0, 1)
     vvc_range = np.arange(0.0, vvclim, 0.1)
     age_range = np.arange(8.5, 9.5, 0.02)
@@ -110,32 +110,14 @@ if __name__ == "__main__":
 #=================================================================================================================================
 # Build grid of models from which emcee will draw to do the data-model fit.
 
-    # form the array of models spanning age and v/vc grid space:
-    # structure is an NxM dimensional matrix of Hess diagrams, indexed 
-    # by i for the ith vector along the rotation rate axis, and by j along 
-    # the jth age axis. Each Hess diagram is normalized to sum to one.
-    vvc_pts = []
-    for i, a_vvc in enumerate(vvc_range):
-        # step through in age, adding an age vector at each point in v/vc space
-        age_vector = [] 
-        for j, an_age in enumerate(age_range):
-
-            a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, an_age, logz, a_vvc, av, dmod))
-            model_hess = a_cmd.cmd['Nsim']
-            model_hess /= np.sum(model_hess)
-
-            age_vector.append(model_hess)
-
-        vvc_pts.append(np.array(age_vector))
-
-    model = np.array(vvc_pts)
+    model = fio.gather_models(cmddir, bf, age_range, logz, vvc_range, av, dmod)
 
 #=================================================================================================================================
 # Perform MCMC algorithm to attain best-fit parameters.
 
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
     # however many walkers, number of iterations:
-    nwalkers, nsteps = 1024, 2048 # 600, 2000
+    nwalkers, nsteps = 256, 512# 600, 2000
     burn = -int(nsteps/2)
 
     #ndim, nwalkers, nsteps = 9, 20, 200
@@ -191,7 +173,7 @@ if __name__ == "__main__":
     rotw = np.array([])
     sample = np.array([-1.]*Nrot) 
     for i in range(nwalkers):
-        while not ((all(sample > obsweight/10.)) & (all(sample < obsweight))):
+        while not ((all(sample > obsweight/20.)) & (all(sample <= obsweight))):
             params = np.ones(Nrot)
             sample = np.array([gammavariate(a,1) for a in params])
             sample = np.array([v/sum(sample) for v in sample])
@@ -215,7 +197,7 @@ if __name__ == "__main__":
     print(pos[0])
 
     # prior limits for v/vc weights
-    lims = np.array([[np.log10(obsweight*1e-5), np.log10(obsweight*1e2)] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
+    lims = np.array([[max([1.0, np.log10(obsweight*1e-4)]), np.log10(obsweight*1.1)] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
 
     print(truths)
     print(lin_truths)
@@ -230,7 +212,7 @@ if __name__ == "__main__":
     print("Running MCMC...")
     # run mcmc:
     print("Thinning chains...")
-    new_pos, sampler = burn_emcee(sampler, pos, [16,32,64,128,256,512])#16, 32, 64, 128, 256, 512, 1024])
+    new_pos, sampler = burn_emcee(sampler, pos, [16,32,64,128,256])#16, 32, 64, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
 
@@ -301,10 +283,11 @@ if __name__ == "__main__":
     ax.set_ylabel('Best Weight', size=24)
     f.savefig(os.path.join(cmddir, svdir, 'soln_vs_vvc_lin.png'))
 
-    # do pg style plots using final 50th percentile weights:
-    gfx.pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, log_weights, filters, svdir=svdir)
     _ = gfx.plot_random_weights(sampler, nsteps, ndim, log_weights, log_err, cmddir, vvclim, log=True, svdir=svdir, truths=truths, burn=burn)
     log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, vvclim, log=False, svdir=svdir, truths=lin_truths, burn=burn)
+
+    # do pg style plots using final 50th percentile weights:
+    gfx.pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, log_weights, filters, svdir=svdir)
 
     row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","t7","t8","t9","age"])
     if ndim == Nrot+2:

@@ -57,7 +57,7 @@ def inrange(x, lims):
     bounds of some range of numbers), this is noninclusive.
     """
 
-    return max(lims) > x > min(lims)
+    return max(lims) >= x >= min(lims)
 
 def lnprior(theta, obsmass, lims):
 
