@@ -81,7 +81,7 @@ def get_cmdf(cmddir, bf, age, logz, vvc, av, dmod):
                                                                                                      av, dmod)
                                                                                                      )
 
-    #print("Looking for {:s}...".format(cmdpath))
+    print("Looking for {:s}...".format(cmdpath))
     cmdfn = glob.glob(cmdpath)[0]
 
     return cmdfn
