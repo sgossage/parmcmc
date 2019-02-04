@@ -143,8 +143,14 @@ def chain_plot(nwalkers, ndim, sampler, cmddir, vvclim, svdir=None, truths=None,
     steps = np.array([range(np.shape(chain)[1])]*nwalkers).flatten()
     cmap = plt.cm.viridis
 
+    print("NaNs in lnprobability? ", any(np.isnan(sampler.lnprobability[:,:].flatten())))
+
+    if any(np.isnan(sampler.lnprobability[:, :].flatten())):
+        lnprob = sampler.lnprobability[:, :].flatten()
+        lnprob = lnprob[np.isfinite(lnprob)]
+
     #for i in range(nwalkers):
-    axa.T[:][0][0].hist2d(steps, sampler.lnprobability[:, :].flatten(), bins=64, cmap=cmap)
+    axa.T[:][0][0].hist2d(steps, np.exp(sampler.lnprobability[:, :]).flatten(), bins=64, cmap=cmap, norm=mpl.colors.LogNorm())
     axa.T[:][1][0].hist2d(steps, np.exp(sampler.lnprobability[:, :]).flatten(), bins=64, cmap=cmap)
     axa.T[:][0][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')
     axa.T[:][1][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')

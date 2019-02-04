@@ -60,15 +60,16 @@ if __name__ == "__main__":
 # Truths are set here as well.
 
     # generate specified model or get specified Hess:
-    agemu = 9.00
-    agesig = 0.3
-    vvcmu = 0.3
-    vvcsig = 0.2
-    Nrot = 10
+    agemu = 9.00  # 9.00 for NGC2249 (and for mocks), 9.20 for NGC 2203
+    agesig = 0.0  # 0.3 was the selection for NGC 2203
+    vvcmu = 0.3   # default 0.3 as the mean
+    vvcsig = 0.2  # 0.2 default std. deviation for rotation distribution
+    Nrot = 10     # 10 is the current max, will create models @ 0.0, 0.1, ..., 0.9; set to 1 for no rotation, v/vc = 0.0
     vvclim = round(Nrot / 10.0, 1)
     vvc_range = np.arange(0.0, vvclim, 0.1)
     age_range = np.arange(8.5, 9.5, 0.02)
     truths = {rot:1e-2 for rot in vvc_range}
+    mass = 5E4 # 1e6 is default
 
     if mode == "mock":
         if vvc is not "gauss":
@@ -76,16 +77,16 @@ if __name__ == "__main__":
                 obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
                 obs = obscmd.cmd['Nsim']
             else:
-                obs = pr.genmod_agespread(cmddir, mass=1e6, agemu=agemu, agesig=agesig, vvclim=vvclim)
+                obs = pr.genmod_agespread(cmddir, mass=maass, agemu=agemu, agesig=agesig, vvclim=vvclim)
 
             truths[round(float(vvc), 1)] = np.sum(obs)
         else:
             if age is not "gauss":
-                obs, truths = pr.genmod_vvcspread(cmddir, age, mass=1e6, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
+                obs, truths = pr.genmod_vvcspread(cmddir, age, mass=mass, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
             else:
-                obs, truths = pr.genmod_agevvcspread(cmddir, mass=1e6, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)
+                obs, truths = pr.genmod_agevvcspread(cmddir, mass=mass, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)
 
-        obsweight = 1e6
+        obsweight = mass
 
     # or else just use the observed Hess diagram values; don't create a model.
     # truth is "unknown" here for the vvc weights; each is set to the total observed counts.
@@ -117,8 +118,8 @@ if __name__ == "__main__":
 
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
     # however many walkers, number of iterations:
-    nwalkers, nsteps = 256, 512# 600, 2000
-    burn = -int(nsteps/2)
+    nwalkers, nsteps = 2048, 512 # 4096 # 600, 2000
+    burn = -int(nsteps/2.) #4.)
 
     #ndim, nwalkers, nsteps = 9, 20, 200
     #burn = -100
@@ -197,7 +198,7 @@ if __name__ == "__main__":
     print(pos[0])
 
     # prior limits for v/vc weights
-    lims = np.array([[max([1.0, np.log10(obsweight*1e-4)]), np.log10(obsweight*1.1)] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
+    lims = np.array([[max([0.0, np.log10(obsweight*1e-4)]), np.log10(obsweight*1.1)] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
 
     print(truths)
     print(lin_truths)
@@ -212,7 +213,7 @@ if __name__ == "__main__":
     print("Running MCMC...")
     # run mcmc:
     print("Thinning chains...")
-    new_pos, sampler = burn_emcee(sampler, pos, [16,32,64,128,256])#16, 32, 64, 128, 256, 512, 1024])
+    new_pos, sampler = burn_emcee(sampler, pos, [256, 512, 1024, 1024])#16, 32, 64, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
 
