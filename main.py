@@ -22,6 +22,17 @@ import prob as pr
 from prob import lnprob
 import fileio as fio
 
+#from functools import partial
+
+
+#lnprob_part = partial(lnprob, kwargs = {"obs":obs, "model":model, "lims":lims})
+
+#pool = emcee.utils.MPIPool(debug=False, loadbalance=True)
+#if not pool.is_master():
+    # Wait for instructions from the master process.
+#    pool.wait()
+#    sys.exit(0)
+
 # right now 4 inputs available/required: cmddir (where .cmd files live), ncpu (num cpus for multiproc), 
 # svdir (directory where plots are saved to), mode (either specifying mock or a run on observations).
 
@@ -31,7 +42,7 @@ if __name__ == "__main__":
 
 #=================================================================================================================================
 # Initialization
-
+    print("Running with {:s} CPUs...".format(sys.argv[2]))
     print("Getting files...")
 
     photbase = sys.argv[1].split('/')[1]
@@ -45,11 +56,22 @@ if __name__ == "__main__":
     cmddir = sys.argv[1]
     # number of cpus, for multiprocessing:
     ncpu = int(sys.argv[2])
+
     svdir = sys.argv[3]
+    # if mode is "mock", a synthetic cluster will be created and used as data (for testing)
+    # if mode is "obs", a Hess diagram will be made from list of observed magnitudes
     mode = sys.argv[4]
+
+    # MATCH style filter names:
     vfilter = sys.argv[5]
     ifilter = sys.argv[6]
-    filters = [vfilter, ifilter]    
+    filters = [vfilter, ifilter]
+
+    # Controls for age and v/vc distributions (agesig = 0.0 means no age spread/vvcsig = 0.0 means no v/vc spread).
+    agemu = round(float(sys.argv[7]), 2)
+    agesig = round(float(sys.argv[8]), 2)
+    vvcmu = round(float(sys.argv[9]), 1)
+    vvcsig = round(float(sys.argv[10]), 1)
 
     #truths = {0.0: 1e-2, 0.1: 1e-2, 0.2: 1e-2, 0.3: 1e-2, 
     #          0.4: 1e-2, 0.5: 1e-2, 0.6: 1e-2, 0.7: 1e-2,
@@ -60,20 +82,26 @@ if __name__ == "__main__":
 # Truths are set here as well.
 
     # generate specified model or get specified Hess:
-    agemu = 9.00  # 9.00 for NGC2249 (and for mocks), 9.20 for NGC 2203
-    agesig = 0.0  # 0.3 was the selection for NGC 2203
-    vvcmu = 0.3   # default 0.3 as the mean
-    vvcsig = 0.2  # 0.2 default std. deviation for rotation distribution
-    Nrot = 10     # 10 is the current max, will create models @ 0.0, 0.1, ..., 0.9; set to 1 for no rotation, v/vc = 0.0
+    #agemu = 9.20  # 9.00 for NGC2249 (and for mocks), 9.20 for NGC 2203
+    #agesig = 0.0  # 0.3 was the selection for NGC 2203
+    #vvcmu = 0.3   # default 0.3 as the mean
+    #vvcsig = 0.2  # 0.2 default std. deviation for rotation distribution
+
+    if vvcsig > 0.0:
+        Nrot = 10     # 10 is the current max, will create models @ 0.0, 0.1, ..., 0.9; set to 1 for no rotation, v/vc = 0.0
+    else:
+        Nrot = 1
+
     vvclim = round(Nrot / 10.0, 1)
     vvc_range = np.arange(0.0, vvclim, 0.1)
     age_range = np.arange(8.5, 9.5, 0.02)
+    # default, dummy truths:
     truths = {rot:1e-2 for rot in vvc_range}
-    mass = 5E4 # 1e6 is default
+    mass = 5E4 # mock cluster "mass" or total counts; 1e6 was default
 
     if mode == "mock":
         if vvc is not "gauss":
-            if age is not "gauss":
+            if age is not "gauss" or agesig == 0.0:
                 obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
                 obs = obscmd.cmd['Nsim']
             else:
@@ -81,7 +109,7 @@ if __name__ == "__main__":
 
             truths[round(float(vvc), 1)] = np.sum(obs)
         else:
-            if age is not "gauss":
+            if age is not "gauss" or agesig == 0.0:
                 obs, truths = pr.genmod_vvcspread(cmddir, age, mass=mass, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
             else:
                 obs, truths = pr.genmod_agevvcspread(cmddir, mass=mass, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)
@@ -99,7 +127,7 @@ if __name__ == "__main__":
     # finalize format of truth values:
     lin_truths = np.array(list(truths.values()))
     truths = np.log10(lin_truths)
-    if age is not "gauss":
+    if age is not "gauss" or agesig == 0.0:
         truths = np.append(truths, agemu)
         lin_truths = np.append(lin_truths, 10**agemu)
         ndim = Nrot+1    
@@ -118,7 +146,7 @@ if __name__ == "__main__":
 
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
     # however many walkers, number of iterations:
-    nwalkers, nsteps = 2048, 512 # 4096 # 600, 2000
+    nwalkers, nsteps = 1024, 512 # 4096 # 600, 2000
     burn = -int(nsteps/2.) #4.)
 
     #ndim, nwalkers, nsteps = 9, 20, 200
@@ -171,33 +199,52 @@ if __name__ == "__main__":
     #print(np.sum(y))
     #sys.exit()
 
+    print("Initializing walker positions...")
     rotw = np.array([])
-    sample = np.array([-1.]*Nrot) 
+    #sample = np.array([-1.]*Nrot) 
+    #print("obsweight = ", obsweight)
     for i in range(nwalkers):
-        while not ((all(sample > obsweight/20.)) & (all(sample <= obsweight))):
+        # while not acceptably near the total observed weight...
+        # (all(sample >= obsweight/20.))
+        sample = np.array([-1.]*Nrot)
+        while not (((all(sample >= obsweight/20.)) & (all(sample <= obsweight)))):
+            # ensuring that all v/vc weights start off on plane wherein the sum of weights
+            # is near the actual total 'observed' weight. 
             params = np.ones(Nrot)
             sample = np.array([gammavariate(a,1) for a in params])
             sample = np.array([v/sum(sample) for v in sample])
             sample = sample*obsweight
         if (i == 0):
-                rotw = np.log10(sample)
+            # add valid position to rotw array    
+            rotw = np.log10(sample)
         else:
+            #print(sample)
+            # stack subsequent initial positions vertically
             rotw = np.vstack((rotw, np.log10(sample)))
 
+    print("Initial positions for v/vc weights found...")
+    print("Assigning remaining initial positions...")
     pos = []
     for i in range(nwalkers):
         posi = rotw[i]
         #posi = truths[:Nrot] + np.random.uniform(-1, 1, Nrot)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
         #posi = np.append(posi, age_posi[i])#
-        posi = np.append(posi, 9.0 + np.random.uniform(-0.2, 0.2, 1))
+        # initial age positions randomized according to uniform dist. about supplied mean age.
+        posi = np.append(posi, agemu + np.random.uniform(-0.2, 0.2, 1))
         if ndim == Nrot+2:
             #posi = np.append(posi, agesig_posi[i])
-            posi = np.append(posi, 0.1 + np.random.uniform(-0.05, 0.05, 1))
+            # initial age gaussian std. dev. randomized according to uniform dist. about supplied sigma.
+            posi = np.append(posi, agesig + np.random.uniform(-0.05, 0.05, 1))
 
         pos.append(posi)
     print(pos[0])
+    print("Sample sum of v/vc weights (log10) = ", np.log10(np.sum(10**pos[0][:Nrot])))
 
-    # prior limits for v/vc weights
+    # debug plot
+    #with open('positions.txt', 'w') as f:
+    #    print(pos[:][:-1], file=f)
+
+    # prior distribution limits for v/vc weights (assuming flat priors).
     lims = np.array([[max([0.0, np.log10(obsweight*1e-4)]), np.log10(obsweight*1.1)] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
 
     print(truths)
@@ -208,14 +255,17 @@ if __name__ == "__main__":
     #sys.exit()
 
     # the affine-invariant emcee sampler:
+    print("Setting up MCMC sampler...")
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, kwargs = {"obs":obs, "model":model, "lims":lims}, threads=ncpu)
+    #sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_part, pool=pool)
 
     print("Running MCMC...")
     # run mcmc:
     print("Thinning chains...")
-    new_pos, sampler = burn_emcee(sampler, pos, [256, 512, 1024, 1024])#16, 32, 64, 128, 256, 512, 1024])
+    new_pos, sampler = burn_emcee(sampler, pos, [16, 32, 64, 128, 256, 512, 1024])#16, 32, 64, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
+#    pool.close()
 
 #=================================================================================================================================
 # Plot the results.
