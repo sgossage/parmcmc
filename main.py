@@ -343,6 +343,8 @@ if __name__ == "__main__":
     row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","t7","t8","t9","age"])
     if ndim == Nrot+2:
         row_names = np.append(row_names, "age_sig")
+    elif ndim == 3:
+        row_names = np.array(["t0", "age", "age_sig"])
     np.savetxt(os.path.join(cmddir, svdir, 'log_solutions.txt'),
                 X=np.c_[row_names, log_highlnP_weights, log_weights, log_err['higher'], log_err['lower']], delimiter='\t',fmt="%s", header="MAP\t50th Percentile\t+err\t-err")
     np.savetxt(os.path.join(cmddir, svdir, 'lin_solutions.txt'),
