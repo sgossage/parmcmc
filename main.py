@@ -47,12 +47,21 @@ if __name__ == "__main__":
 
     photbase = sys.argv[1].split('/')[1]
     bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
+
+    av = format(float(av),'.2f')
+
+    # move down a grid point if given age is off age grid (not even)
+    agebinf = np.array(list(map(float, agebin)))
+    if not (agebinf[0]*100) % 2 == 0:
+        agebinf = agebinf - 0.01
+        agebin = list(map(str, agebinf))
+
     print(bf, av, agebin, logz, dmod)
     print(type(bf), type(av), type(agebin[0]), type(agebin[1]), type(logz), type(dmod))
     
     # these should be made into dynamix inputs. 0.00, "gauss", "-0.30", "gauss", "0.0", "0.00", "Tycho_B", "Tycho_V"
     #bf, age, logz, vvc, av, dmod, vfilter, ifilter = "0.25", "gauss", "-0.30", "gauss", "0.16", "18.37", "UVIS475W", "UVIS814W"
-    age, vvc = "gauss", "gauss"
+    #age, vvc = "gauss", "gauss"
     cmddir = sys.argv[1]
     # number of cpus, for multiprocessing:
     ncpu = int(sys.argv[2])
@@ -100,17 +109,17 @@ if __name__ == "__main__":
     mass = 5E4 # mock cluster "mass" or total counts; 1e6 was default
 
     if mode == "mock":
-        if vvc is not "gauss":
-            if age is not "gauss" or agesig == 0.0:
-                obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
+        if vvcsig == 0.0:
+            if agesig == 0.0:
+                obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, agemu, logz, vvcmu, av, dmod))
                 obs = obscmd.cmd['Nsim']
             else:
                 obs = pr.genmod_agespread(cmddir, mass=maass, agemu=agemu, agesig=agesig, vvclim=vvclim)
 
             truths[round(float(vvc), 1)] = np.sum(obs)
         else:
-            if age is not "gauss" or agesig == 0.0:
-                obs, truths = pr.genmod_vvcspread(cmddir, age, mass=mass, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
+            if agesig == 0.0:
+                obs, truths = pr.genmod_vvcspread(cmddir, agemu, mass=mass, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
             else:
                 obs, truths = pr.genmod_agevvcspread(cmddir, mass=mass, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)
 
@@ -119,7 +128,7 @@ if __name__ == "__main__":
     # or else just use the observed Hess diagram values; don't create a model.
     # truth is "unknown" here for the vvc weights; each is set to the total observed counts.
     elif mode == "obs":
-        obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
+        obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, agemu, logz, vvcmu, av, dmod))
         obs = obscmd.cmd['Nobs']
         obsweight = np.sum(obs)
         truths = {x: obsweight for x in truths}
@@ -127,7 +136,7 @@ if __name__ == "__main__":
     # finalize format of truth values:
     lin_truths = np.array(list(truths.values()))
     truths = np.log10(lin_truths)
-    if age is not "gauss" or agesig == 0.0:
+    if agesig == 0.0:
         truths = np.append(truths, agemu)
         lin_truths = np.append(lin_truths, 10**agemu)
         ndim = Nrot+1    
@@ -139,7 +148,7 @@ if __name__ == "__main__":
 #=================================================================================================================================
 # Build grid of models from which emcee will draw to do the data-model fit.
 
-    model = fio.gather_models(cmddir, bf, age_range, logz, vvc_range, av, dmod)
+    model, dinds = fio.gather_models(cmddir, bf, age_range, logz, vvc_range, av, dmod)
 
 #=================================================================================================================================
 # Perform MCMC algorithm to attain best-fit parameters.
@@ -256,7 +265,7 @@ if __name__ == "__main__":
 
     # the affine-invariant emcee sampler:
     print("Setting up MCMC sampler...")
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, kwargs = {"obs":obs, "model":model, "lims":lims}, threads=ncpu)
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, kwargs = {"obs":obs, "model":model, "lims":lims, "dinds":dinds}, threads=ncpu)
     #sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_part, pool=pool)
 
     print("Running MCMC...")
@@ -338,7 +347,7 @@ if __name__ == "__main__":
     log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, vvclim, log=False, svdir=svdir, truths=lin_truths, burn=burn)
 
     # do pg style plots using final 50th percentile weights:
-    gfx.pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, log_weights, filters, svdir=svdir)
+    gfx.pgplot(obs, model, cmddir, bf, agemu, logz, av, dmod, vvclim, log_weights, filters, svdir=svdir)
 
     row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","t7","t8","t9","age"])
     if ndim == Nrot+2:

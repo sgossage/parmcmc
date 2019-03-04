@@ -22,11 +22,20 @@ def gather_models(cmddir, bf, age_range, logz, vvc_range, av, dmod):
 
         vvc_pts.append(np.array(age_vector))
 
+    gates = a_cmd.cmd['gate']
+    ugates = np.unique(gates)
+    if len(ugates) > 1:
+        dinds = np.digitize(gates, bins=ugates, right=True)
+    else:
+        dinds = None
+
     model = np.array(vvc_pts)
 
-    return model
+    return model, dinds
 
 def parse_fname(photfn, mode="float"):
+
+    # used by mk_calcsfh_param.py to make a calcsfh paramfile
 
     # photometry file has bfx.x_avx.x_tx.xx_x.xx_logZx.xx_dmod_x.xx.phot.mags
     # this takes these parameters from the file name so that they may be used 
@@ -67,13 +76,13 @@ def get_cmdf(cmddir, bf, age, logz, vvc, av, dmod):
     """
 
     vvc = str(vvc)
-    if vvc == "gauss":
+    #if vvc == "gauss":
         # arbitrary assignment [0.0, 0.6]
-        vvc = "0.3"
+    #    vvc = "0.3"
     #age = str(age)
-    if age == "gauss":
+    #if age == "gauss":
         # arbitrary assignment [8.5,9.5]
-        age = 9.00
+    #    age = 9.00
     # for the path to the .cmd file:
     cmdpath = os.path.join(cmddir,
                                    'bf{:s}_t{:.2f}_logz{:s}_vvc{:s}_av{:s}_dmod{:s}.out.cmd'.format(bf, age,
@@ -81,7 +90,7 @@ def get_cmdf(cmddir, bf, age, logz, vvc, av, dmod):
                                                                                                      av, dmod)
                                                                                                      )
 
-    #print("Looking for {:s}...".format(cmdpath))
+    print("Looking for {:s}...".format(cmdpath))
     cmdfn = glob.glob(cmdpath)[0]
 
     return cmdfn
