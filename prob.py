@@ -7,7 +7,7 @@ from match.MISTscripts.plotruns import *
 from gausweight import *
 import fileio as fio
 
-def lnlike(obs, model):
+def lnlike(obs, model, dinds):
     '''
     FROM MATCH README
     The quality of the fit is calculated using a Poisson maximum likelihood
@@ -26,16 +26,23 @@ def lnlike(obs, model):
     Returns
     -2lnP, P, sig i.e., (sqrt(-2lnP) * sign(n-m))
     '''
-    
-    # This is M_i:
-    m = model
 
-    # The data:
-    n = obs
+
+    # dinds marks bins to ignore; e.g., will ignore bins flagged 
+    # as being in any exclusion regions.    
+    if dinds is None:
+        # This is M_i:
+        m = model
+
+        # The data:
+        n = obs
+    else:
+        dinds = np.array(list(map(bool, dinds)))
+        m = model[dinds]
+        n = obs[dinds]
 
     # global -2lnP:
     m2lnP = 2. * (m + n * np.log(n / m) - n)
-
     
     smalln = np.abs(n) < 1e-10
     m2lnP[smalln] = 2. * m[smalln]
@@ -108,7 +115,7 @@ def lnprior(theta, obsmass, lims):
     return -np.inf
 
 # Full Probability
-def lnprob(theta, obs, model, lims):
+def lnprob(theta, obs, model, lims, dinds):
     
     """
         Represents the full log-Probability (prior*likelihood). The "obs" is a 
@@ -158,7 +165,7 @@ def lnprob(theta, obs, model, lims):
     #end = time.time()
     #print("t = {:f} s".format(end - start))
     # full posterior probabliity, calls likelihood:
-    return lp + lnlike(obs, M)
+    return lp + lnlike(obs, M, dinds)
 
 def linear_uncof(t, mode):
 

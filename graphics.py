@@ -150,11 +150,11 @@ def chain_plot(nwalkers, ndim, sampler, cmddir, vvclim, svdir=None, truths=None,
         lnprob = lnprob[np.isfinite(lnprob)]
 
     #for i in range(nwalkers):
-    axa.T[:][0][0].hist2d(steps, np.exp(sampler.lnprobability[:, :]).flatten(), bins=64, cmap=cmap, norm=mpl.colors.LogNorm())
-    axa.T[:][1][0].hist2d(steps, np.exp(sampler.lnprobability[:, :]).flatten(), bins=64, cmap=cmap)
-    axa.T[:][0][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')
-    axa.T[:][1][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')
-    axa.T[:][0][0].set_ylabel(labels[0])
+    #axa.T[:][0][0].hist2d(steps, np.exp(sampler.lnprobability[:, :]).flatten(), bins=64, cmap=cmap, norm=mpl.colors.LogNorm())
+    #axa.T[:][1][0].hist2d(steps, np.exp(sampler.lnprobability[:, :]).flatten(), bins=64, cmap=cmap)
+    #axa.T[:][0][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')
+    #axa.T[:][1][0].axvline(x=np.shape(chain)[1]-1 + burn, c='r')
+    #axa.T[:][0][0].set_ylabel(labels[0])
     for j in range(ndim):
             # only plot every 100th walker:
             #if not i % 10:
@@ -309,9 +309,9 @@ def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, vvclim, log
             pass
 
     ax.set_xlabel(r'$\Omega/\Omega_c$', size=24)
-    ax.set_ylabel('Weight', size=24)
+    ax.set_ylabel('Rel. Star Weight', size=24)
     if log:
-        ax.set_ylabel('log Weight', size=24)
+        ax.set_ylabel('log Rel. Star Weight', size=24)
 
     # plot the final 50th percentile weights as a red line; also use a filled region 
     # to indicate uncertainty:  
@@ -330,14 +330,14 @@ def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, vvclim, log
     if log:
         ax.plot(vvcs, log_highlnP_weights[:Nrot], c='c')
         if svdir == None:
-            f.savefig(os.path.join(cmddir, 'log_soln_random.png'))
+            f.savefig(os.path.join(cmddir, 'log_relweight_random.png'))
         else:
-            f.savefig(os.path.join(cmddir, svdir, 'log_soln_random.png'))
+            f.savefig(os.path.join(cmddir, svdir, 'log_relweight_random.png'))
     else:
         ax.plot(vvcs, lin_highlnP_weights[:Nrot], c='c')
         if svdir == None:
-            f.savefig(os.path.join(cmddir, 'lin_soln_random.png'))
+            f.savefig(os.path.join(cmddir, 'lin_relweight_random.png'))
         else:
-            f.savefig(os.path.join(cmddir, svdir, 'lin_soln_random.png'))
+            f.savefig(os.path.join(cmddir, svdir, 'lin_relweight_random.png'))
 
     return log_highlnP_weights, lin_highlnP_weights

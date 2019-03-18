@@ -98,8 +98,10 @@ if __name__ == "__main__":
 
     if vvcsig > 0.0:
         Nrot = 10     # 10 is the current max, will create models @ 0.0, 0.1, ..., 0.9; set to 1 for no rotation, v/vc = 0.0
-    else:
+    elif (vvcsig == 0.0) & (agesig > 0.0):
         Nrot = 1
+
+    print(Nrot)
 
     vvclim = round(Nrot / 10.0, 1)
     vvc_range = np.arange(0.0, vvclim, 0.1)
@@ -114,9 +116,9 @@ if __name__ == "__main__":
                 obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, agemu, logz, vvcmu, av, dmod))
                 obs = obscmd.cmd['Nsim']
             else:
-                obs = pr.genmod_agespread(cmddir, mass=maass, agemu=agemu, agesig=agesig, vvclim=vvclim)
+                obs = pr.genmod_agespread(cmddir, mass=mass, agemu=agemu, agesig=agesig)
 
-            truths[round(float(vvc), 1)] = np.sum(obs)
+            truths[round(float(vvcmu), 1)] = np.sum(obs)
         else:
             if agesig == 0.0:
                 obs, truths = pr.genmod_vvcspread(cmddir, agemu, mass=mass, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
@@ -260,7 +262,7 @@ if __name__ == "__main__":
     print(lin_truths)
     print(lims)
     print(len(lims))
-    print(ndim)
+    print("NUMBER OF DIMENSIONS: ", ndim)
     #sys.exit()
 
     # the affine-invariant emcee sampler:
@@ -333,15 +335,15 @@ if __name__ == "__main__":
     ax.errorbar(vvc_range, log_weights[:Nrot], yerr=[log_err['lower'][:Nrot], log_err['higher'][:Nrot]], c='r', ls='--')
     ax.plot(vvc_range, truths[:Nrot], c='k')
     ax.set_xlabel(r'$\Omega/\Omega_c$', size=24)
-    ax.set_ylabel('log Best Weight', size=24)
-    f.savefig(os.path.join(cmddir, svdir, 'soln_vs_vvc.png'))
+    ax.set_ylabel('log Rel. Star Weight', size=24)
+    f.savefig(os.path.join(cmddir, svdir, 'logrelweight_vs_vvc.png'))
 
     f,ax=plt.subplots(1,1,figsize=(16,9))
     ax.errorbar(vvc_range, lin_weights[:Nrot], yerr=[lin_err['lower'][:Nrot], lin_err['higher'][:Nrot]], c='r', ls='--')
     ax.plot(vvc_range, lin_truths[:Nrot], c='k')
     ax.set_xlabel(r'$\Omega/\Omega_c$', size=24)
-    ax.set_ylabel('Best Weight', size=24)
-    f.savefig(os.path.join(cmddir, svdir, 'soln_vs_vvc_lin.png'))
+    ax.set_ylabel('Rel. Star Weight', size=24)
+    f.savefig(os.path.join(cmddir, svdir, 'relweight_vs_vvc.png'))
 
     _ = gfx.plot_random_weights(sampler, nsteps, ndim, log_weights, log_err, cmddir, vvclim, log=True, svdir=svdir, truths=truths, burn=burn)
     log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, vvclim, log=False, svdir=svdir, truths=lin_truths, burn=burn)
@@ -349,15 +351,19 @@ if __name__ == "__main__":
     # do pg style plots using final 50th percentile weights:
     gfx.pgplot(obs, model, cmddir, bf, agemu, logz, av, dmod, vvclim, log_weights, filters, svdir=svdir)
 
-    row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","t7","t8","t9","age"])
-    if ndim == Nrot+2:
+    if vvcsig == 0.0:
+        row_names = np.array(["t0", "age"])
+    else:
+        row_names = np.array(["t0", "t1", "t2", "t3", "t4", "t5", "t6","t7","t8","t9","age"])
+
+    if agesig > 0.0:
         row_names = np.append(row_names, "age_sig")
-    elif ndim == 3:
-        row_names = np.array(["t0", "age", "age_sig"])
+
+    print(row_names)
     np.savetxt(os.path.join(cmddir, svdir, 'log_solutions.txt'),
-                X=np.c_[row_names, log_highlnP_weights, log_weights, log_err['higher'], log_err['lower']], delimiter='\t',fmt="%s", header="MAP\t50th Percentile\t+err\t-err")
+                X=np.c_[row_names, log_highlnP_weights, log_weights, log_err['higher'], log_err['lower'], truths], delimiter='\t',fmt="%s", header="MAP\t 50th Percentile\t +err\t -err\t truth")
     np.savetxt(os.path.join(cmddir, svdir, 'lin_solutions.txt'),
-                X=np.c_[row_names, lin_highlnP_weights, lin_weights, lin_err['higher'], lin_err['lower']], delimiter='\t',fmt="%s", header="MAP\t50th Percentile\t+err\t-err")
+                X=np.c_[row_names, lin_highlnP_weights, lin_weights, lin_err['higher'], lin_err['lower'], truths], delimiter='\t',fmt="%s", header="MAP\t 50th Percentile\t +err\t -err\t truth")
 
 #=================================================================================================================================
 
