@@ -66,7 +66,7 @@ def inrange(x, lims):
 
     return max(lims) >= x >= min(lims)
 
-def lnprior(theta, obsmass, lims):
+def lnprior(theta, obsmass, lims, age_range):
 
     """
         Represents the prior distribution for parameters in the MCMC fit. This uses a 
@@ -87,7 +87,7 @@ def lnprior(theta, obsmass, lims):
         sigma = theta[Nrot+1]
         mu = theta[Nrot]
         rot_weights = theta[:Nrot]
-        if sigma < 0.02 or sigma > 1.0:
+        if sigma < 1e-4 or sigma > 1.0:
             return -np.inf
     else:
         sigma = 0.0
@@ -109,13 +109,13 @@ def lnprior(theta, obsmass, lims):
     #if inrange(a0, lims[0]) and inrange(a1, lims[1]) and inrange(a2, lims[2]) and inrange(a3, lims[3]) \
     #   and inrange(a4, lims[4]) and inrange(a5, lims[5]) and inrange(a6, lims[6]) and \
     #   inrange(a7, lims[7]) and inrange(a8, lims[8]) and inrange(a9, lims[9]) and mu < 9.5 and mu > 8.5:
-    if mu < 9.5 and mu > 8.5:
+    if mu < max(age_range) and mu > min(age_range):
         return 0.0
 
     return -np.inf
 
 # Full Probability
-def lnprob(theta, obs, model, lims, dinds):
+def lnprob(theta, obs, model, lims, dinds, vvc_range, age_range):
     
     """
         Represents the full log-Probability (prior*likelihood). The "obs" is a 
@@ -144,7 +144,7 @@ def lnprob(theta, obs, model, lims, dinds):
 
     # (we're fitting for the rotation weights of ea. model,
     # and the mean/std. dev. of a gaussian age distribution.
-    age_range = np.arange(8.5,9.5,0.02)
+    #age_range = np.arange(8.5,9.5,0.02)
     ageweights = gen_gaussweights(age_range, mu, sigma)
     # model[i] is the vector of all j Hess diagrams varying in age, and 
     # constant in the ith v/vc. I.e., model = model[i][j]...
@@ -157,7 +157,7 @@ def lnprob(theta, obs, model, lims, dinds):
 
     obsmass = np.log10(np.sum(obs))
     # prior probability:
-    lp = lnprior(theta, obsmass, lims)
+    lp = lnprior(theta, obsmass, lims, age_range)
 
     if not np.isfinite(lp):
         return -np.inf
@@ -275,7 +275,6 @@ def genmod_agespread(cmddir, mass, agemu, agesig):
 def genmod_vvcspread(cmddir, age, mass, vvcmu, vvcsig, vvclim):
 
     vvcs = np.arange(0.0, vvclim, 0.1)
-    mu, sig = 0.3, 0.05
     vvcweights = gen_gaussweights(vvcs, vvcmu, vvcsig)
 
     photbase = cmddir.split('/')[1]
@@ -284,6 +283,38 @@ def genmod_vvcspread(cmddir, age, mass, vvcmu, vvcsig, vvclim):
     hess_arr = []
     for vvc in vvcs:
  
+        a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
+        mock_hess = a_cmd.cmd['Nsim']
+        mock_hess /= np.sum(mock_hess)
+        #if age == ages[0]:
+        #    composite_hess = mock_hess
+        #else:
+    #    composite_hess += mock_hess
+        hess_arr.append(mock_hess)
+
+    hess_arr = np.array(hess_arr)
+
+    #print(len(hess_arr))
+    #print(len(vvcweights))
+    composite_hess = np.sum(vvcweights*hess_arr.T, axis=1)
+    #print(len(composite_hess))
+    truths = {}
+    for i, vvc in enumerate(vvcs):
+        truths[vvc] = mass*vvcweights[i]
+
+    return mass*composite_hess, truths
+
+def genmod_bivvcspread(cmddir, age, mass, vvcmu1, vvcsig1, vvcmu2, vvcsig2, vvclim):
+
+    vvcs = np.arange(0.0, vvclim, 0.1)
+    vvcweights = gen_bigaussweights(vvcs, vvcmu1, vvcsig1, vvcmu2, vvcsig2)
+
+    photbase = cmddir.split('/')[1]
+    bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
+
+    hess_arr = []
+    for vvc in vvcs:
+
         a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, age, logz, vvc, av, dmod))
         mock_hess = a_cmd.cmd['Nsim']
         mock_hess /= np.sum(mock_hess)
@@ -348,3 +379,48 @@ def genmod_agevvcspread(cmddir, mass, agemu, agesig, vvcmu, vvcsig, vvclim):
         truths[vvc] = mass*vvcweights[i]
 
     return mass*composite_hess, truths
+
+def genmod_agebivvcspread(cmddir, mass, agemu, agesig, vvcmu1, vvcsig1, vvcmu2, vvcsig2, vvclim):
+
+    ages = np.arange(8.50, 9.50, 0.02)
+    #mu, sig = 9.00, 0.3
+    ageweights = gen_gaussweights(ages, agemu, agesig)
+
+    vvcs = np.arange(0.0, vvclim, 0.1)
+    #mu, sig = 0.3, 0.2
+    vvcweights = gen_bigaussweights(vvcs, vvcmu1, vvcsig1, vvcmu2, vvcsig2)
+
+    photbase = cmddir.split('/')[1]
+    bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
+
+    composite_hess = cmd.CMD(fio.get_cmdf(cmddir, bf, 9.00, logz, 0.0, av, dmod))
+    composite_hess = np.zeros(len(composite_hess.cmd['Nsim']))
+
+    vvc_pts = []
+    for i, a_vvc in enumerate(vvcs):
+        # step through in age, adding an age vector at each point in v/vc space
+        age_vector = []
+        for j, an_age in enumerate(ages):
+
+            a_cmd = cmd.CMD(fio.get_cmdf(cmddir, bf, an_age, logz, a_vvc, av, dmod))
+            model_hess = a_cmd.cmd['Nsim']
+            model_hess /= np.sum(model_hess)
+
+            age_vector.append(model_hess)
+
+        vvc_pts.append(np.array(age_vector))
+
+    model = np.array(vvc_pts)
+
+    composite_hess += np.sum((vvcweights[:, np.newaxis])*np.sum(ageweights[:,np.newaxis]*model, axis=1), axis=0)
+
+    #print(len(hess_arr))
+    #print(len(vvcweights))
+    #composite_hess = np.sum(vvcweights*hess_arr.T, axis=1)
+    #print(len(composite_hess))
+    truths = {}
+    for i, vvc in enumerate(vvcs):
+        truths[vvc] = mass*vvcweights[i]
+
+    return mass*composite_hess, truths
+

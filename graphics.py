@@ -24,7 +24,7 @@ def MyFormatter(x,lim):
         return '{0}e{1}'.format(round(x/10**np.floor(np.log10(x)),3),int(np.log10(x)))
 
 # This does a pg style plot of the models and data, given a set of weights for the models:
-def pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, weights, filters, svname=None, log=False, svdir=None):
+def pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, weights, filters, age_range, svname=None, log=False, svdir=None):
 
     """
         Creates a MATCH pg style plot of data, model, data-model, and -2lnP map.
@@ -35,7 +35,7 @@ def pgplot(obs, model, cmddir, bf, age, logz, av, dmod, vvclim, weights, filters
 
     vvc_range = np.arange(0.0, vvclim, 0.1)
     Nrot = len(vvc_range)
-    age_range = np.arange(8.5, 9.5, 0.02)
+    #age_range = np.arange(8.5, 9.5, 0.02)
     mu = weights[Nrot]
     try:
         sigma = weights[Nrot+1]
@@ -288,15 +288,15 @@ def plot_random_weights(sampler, nsteps, ndim, weights, err, cmddir, vvclim, log
                 highlnP_weights[j] = sampler.chain[:, burn+i, j][np.where(np.exp(sampler.lnprobability[:, burn+i]) == max(np.exp(sampler.lnprobability[:, burn+i])))[0][0]]
                 prevlnP[j] = max(np.exp(sampler.lnprobability[:, burn+i]))
 
-        # this can fail if rand_weights is not found.
+        # this can fail if rand_weights is not found. DID fail cause filters wasn't given to pgplot before, but obsolete?
         try:
             rand_weights = np.array(rand_weights)
             if log:
                 # pg plot as this iteration, using weights from the randomly selected walkers:
                 if svdir == None:
-                    pgplot(cmddir, bf, age, logz, av, dmod, rand_weights, svname = "match_pgplot_{:d}.png".format(i))
+                    pgplot(cmddir, bf, age, logz, av, dmod, rand_weights, filters, age_range, svname = "match_pgplot_{:d}.png".format(i))
                 else:
-                    pgplot(cmddir, bf, age, logz, av, dmod, rand_weights, svname = "{:s}/match_pgplot_{:d}.png".format(svdir, i))            
+                    pgplot(cmddir, bf, age, logz, av, dmod, rand_weights, filters, age_range, svname = "{:s}/match_pgplot_{:d}.png".format(svdir, i))            
 
             else:
                 # swap to linear weights:

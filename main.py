@@ -45,9 +45,11 @@ if __name__ == "__main__":
     print("Running with {:s} CPUs...".format(sys.argv[2]))
     print("Getting files...")
 
+    # cuts te given directory containing the .cmd files to get the photometry file base (system dep, kinda bad rule for this).
     photbase = sys.argv[1].split('/')[1]
-    bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
 
+    # The binary fraction, etc. are taken from the photometry filename:
+    bf, av, agebin, logz, dmod = fio.parse_fname(photbase, mode="str")
     av = format(float(av),'.2f')
 
     # move down a grid point if given age is off age grid (not even)
@@ -59,16 +61,21 @@ if __name__ == "__main__":
     print(bf, av, agebin, logz, dmod)
     print(type(bf), type(av), type(agebin[0]), type(agebin[1]), type(logz), type(dmod))
     
-    # these should be made into dynamix inputs. 0.00, "gauss", "-0.30", "gauss", "0.0", "0.00", "Tycho_B", "Tycho_V"
-    #bf, age, logz, vvc, av, dmod, vfilter, ifilter = "0.25", "gauss", "-0.30", "gauss", "0.16", "18.37", "UVIS475W", "UVIS814W"
-    #age, vvc = "gauss", "gauss"
+    # where the .cmd files are located:
     cmddir = sys.argv[1]
+
     # number of cpus, for multiprocessing:
     ncpu = int(sys.argv[2])
 
+    # where plots will be saved:
     svdir = sys.argv[3]
-    # if mode is "mock", a synthetic cluster will be created and used as data (for testing)
-    # if mode is "obs", a Hess diagram will be made from list of observed magnitudes
+
+    # if mode is "mock", a synthetic cluster will be created and used as data (for testing); uses the given vvcsig, etc. to generate.
+    # So, "mock" will create perfect conditions for a test -- the models should recover the data more or less perfectly.
+    # if mode is "mock-sigtau", a synthetic cluster with just an age distribution will be created, despite model parameter limits.
+    # if mode is "mock-sigom", '                             ' a rotation distribution will be created, '                        '.
+    # if mode is "mock-full", '                              ' everything will be created, despite model parameter limits.
+    # if mode is "obs", a Hess diagram will be made from list of observed magnitudes (i.e., for a run using real data).
     mode = sys.argv[4]
 
     # MATCH style filter names:
@@ -76,64 +83,123 @@ if __name__ == "__main__":
     ifilter = sys.argv[6]
     filters = [vfilter, ifilter]
 
-    # Controls for age and v/vc distributions (agesig = 0.0 means no age spread/vvcsig = 0.0 means no v/vc spread).
+    # Controls for age and v/vc distributions (agesig = 0.0 means no age spread/vvcsig = 0.0 means no v/vc spread) that the models 
+    # are allowed to take on. I.e., specifies the scenario for the models to test.If mode is "mock", the mock data will also use 
+    # these values and will match the scenario being considered by the models.
     agemu = round(float(sys.argv[7]), 2)
     agesig = round(float(sys.argv[8]), 2)
     vvcmu = round(float(sys.argv[9]), 1)
     vvcsig = round(float(sys.argv[10]), 1)
 
-    #truths = {0.0: 1e-2, 0.1: 1e-2, 0.2: 1e-2, 0.3: 1e-2, 
-    #          0.4: 1e-2, 0.5: 1e-2, 0.6: 1e-2, 0.7: 1e-2,
-    #          0.8: 1e-2, 0.9: 1e-2}
+    # sets defaults for the mock data generation, given a specified mode of operation:
+    # E.g., defaults used in previous tests were 9.00, 0.3, 0.3, 0.2.
+    default_agemu = 9.00
+    default_agesig = 0.05
+    default_vvcmu = 0.4
+    default_vvcsig = 0.2
+
+    if mode == "mock-sigtau":
+        # no rotation distribution:
+        mockd_agemu, mockd_agesig, mockd_vvcmu1, mockd_vvcsig1 = [agemu, default_agesig, 0.0, 0.0]
+    elif mode == "mock-sigom":
+        # no age distribution
+        mockd_agemu, mockd_agesig, mockd_vvcmu1, mockd_vvcsig1 = [agemu, 0.0, default_vvcmu, default_vvcsig]
+    elif mode == "mock-bisigom":
+        # no age distribution, bimodal distribution of rotation rates
+        mockd_agemu, mockd_agesig, mockd_vvcmu1, mockd_vvcsig1, mockd_vvcmu2, mockd_vvcsig2 = [agemu, 0.0, 0.1, 0.1, 0.7, 0.2]
+    elif mode == "mock-full":
+        mockd_agemu, mockd_agesig, mockd_vvcmu1, mockd_vvcsig1 = [agemu, default_agesig, default_vvcmu, default_vvcsig]
+    elif mode == "mock-fullbi":
+        mockd_agemu, mockd_agesig, mockd_vvcmu1, mockd_vvcsig1, mockd_vvcmu2, mockd_vvcsig2 = [agemu, default_agesig, 0.1, 0.1, 0.7, 0.2]
+    else:
+        # here's the case of "mock", the mock data will perfectly match the scenario proposed for the models to explore:
+        mockd_agemu, mockd_agesig, mockd_vvcmu1, mockd_vvcsig1 = [agemu, agesig, vvcmu, vvcsig]
 
 #=================================================================================================================================
 # Model generation for mock data, or else assigning "observations" to the given observed data.
 # Truths are set here as well.
 
-    # generate specified model or get specified Hess:
-    #agemu = 9.20  # 9.00 for NGC2249 (and for mocks), 9.20 for NGC 2203
-    #agesig = 0.0  # 0.3 was the selection for NGC 2203
-    #vvcmu = 0.3   # default 0.3 as the mean
-    #vvcsig = 0.2  # 0.2 default std. deviation for rotation distribution
-
+    # rotation distribution allowed in model search:
     if vvcsig > 0.0:
-        Nrot = 10     # 10 is the current max, will create models @ 0.0, 0.1, ..., 0.9; set to 1 for no rotation, v/vc = 0.0
+        Nrot = 10                                       # 10 is the current max, will create models @ 0.0, 0.1, ..., 0.9
+    # rotation distribution disallowed in model search:
     elif (vvcsig == 0.0) & (agesig > 0.0):
-        Nrot = 1
+        Nrot = 1                                        # Will only consider models @ om/omc = 0.0 when set to 1.
 
     print(Nrot)
 
     vvclim = round(Nrot / 10.0, 1)
     vvc_range = np.arange(0.0, vvclim, 0.1)
-    age_range = np.arange(8.5, 9.5, 0.02)
-    # default, dummy truths:
-    truths = {rot:1e-2 for rot in vvc_range}
-    mass = 5E4 # mock cluster "mass" or total counts; 1e6 was default
+    age_range = np.arange(7.9, 9.5, 0.02) # lower lim was 8.5
+    # default, dummy truths; will be reassigned:
+    truths = {rot:1e-11 for rot in vvc_range}
+    mass = 5E4                                          # mock cluster "mass" or total counts; 1e6 was default
 
-    if mode == "mock":
-        if vvcsig == 0.0:
-            if agesig == 0.0:
-                obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, agemu, logz, vvcmu, av, dmod))
-                obs = obscmd.cmd['Nsim']
+    # Generates mock data from the model library to use instead of observed data if told to:
+    if "mock" in mode:
+        # case of no rotation distribution:
+        if mockd_vvcsig1 == 0.0:
+            # and no age distribution (would be an SSP):
+            if mockd_agesig == 0.0:
+                obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, mockd_agemu, logz, mockd_vvcmu1, av, dmod))
+                obs = obscmd.cmd['Nobs']
+            # age distribution, no rotation distribution, P(sigtau); in practice will trigger so long as mode is mock-sigtau and agesig !=0.0:
             else:
-                obs = pr.genmod_agespread(cmddir, mass=mass, agemu=agemu, agesig=agesig)
+                print("GENERATING MOCK DATA WITH AGE SPREAD...")
+                obs = pr.genmod_agespread(cmddir, mass=mass, agemu=mockd_agemu, agesig=mockd_agesig)
 
-            truths[round(float(vvcmu), 1)] = np.sum(obs)
+            obsweight = np.sum(obs)
+            # using lower limit of weight search prior for truths of "zero" components.
+            truths = {rot:max([0.0, np.log10(obsweight*1e-4)]) for rot in vvc_range}
+            truths[round(float(mockd_vvcmu1), 1)] = obsweight
+        
+        # case allowing a rotation distribution:
         else:
-            if agesig == 0.0:
-                obs, truths = pr.genmod_vvcspread(cmddir, agemu, mass=mass, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)        
+            # and no age distribution P(sigom):
+            if mockd_agesig == 0.0:
+                print("GENERATING MOCK DATA WITH ROTATION SPREAD...")
+       	       	#print(mockd_agemu)
+       	       	#print(mockd_agesig)
+       	       	#print(mockd_vvcmu)
+                #print(mockd_vvcsig)
+                if mode == "mock-bisigom":
+                    obs, truths = pr.genmod_bivvcspread(cmddir, mockd_agemu, mass=mass, vvcmu1=mockd_vvcmu1, vvcsig1=mockd_vvcsig1, vvcmu2=mockd_vvcmu2, vvcsig2=mockd_vvcsig2, vvclim=1.0)                    
+                else:
+                    obs, truths = pr.genmod_vvcspread(cmddir, mockd_agemu, mass=mass, vvcmu=mockd_vvcmu1, vvcsig=mockd_vvcsig1, vvclim=1.0)
+                print(truths)
+                # Don't use full truth range of mock data's vvc distribution if fitting age spread model to pure rotation spread mock 
+                # data b/c model only knows one rotation rate exists:
+                if (vvcsig == 0.0) & (agesig > 0.0):
+                    print("correcting truths...")
+                    truths = {vvcmu:truths[vvcmu]}
+                    print(truths)
+
+            # allowing both an age and rotation rate distribution, P(sigom, sigtau); will trigger if vvcsig and agesig != 0 
+            # and mode != "mock-sigom" or "mock-sigtau":        
             else:
-                obs, truths = pr.genmod_agevvcspread(cmddir, mass=mass, agemu=agemu, agesig=agesig, vvcmu=vvcmu, vvcsig=vvcsig, vvclim=vvclim)
+                print("GENERATING MOCK DATA WITH AGE AND ROTATION SPREAD...")
+                if mode == "mock-fullbi":
+                    obs, truths = pr.genmod_agebivvcspread(cmddir, mass=mass, agemu=mockd_agemu, agesig=mockd_agesig, vvcmu1=mockd_vvcmu1, vvcsig1=mockd_vvcsig1, vvcmu2=mockd_vvcmu2, vvcsig2=mockd_vvcsig2, vvclim=1.0)
+                else:
+                    obs, truths = pr.genmod_agevvcspread(cmddir, mass=mass, agemu=mockd_agemu, agesig=mockd_agesig, vvcmu=mockd_vvcmu1, vvcsig=mockd_vvcsig1, vvclim=1.0)
 
         obsweight = mass
 
-    # or else just use the observed Hess diagram values; don't create a model.
+    # or else just use the observed Hess diagram values; don't create mock data from models.
     # truth is "unknown" here for the vvc weights; each is set to the total observed counts.
     elif mode == "obs":
         obscmd = cmd.CMD(fio.get_cmdf(cmddir, bf, agemu, logz, vvcmu, av, dmod))
         obs = obscmd.cmd['Nobs']
         obsweight = np.sum(obs)
         truths = {x: obsweight for x in truths}
+
+    elif mode == "read-in":
+        obscmd = np.genfromtxt(cmddir)
+        obscmd = obscmd.T
+        obs = obscmd[2]
+        obsweight = np.sum(obs)
+        truths = {x:obsweight for x in truths}
+        cmddir = os.path.join(*cmddir.split('/')[:-2])
 
     # finalize format of truth values:
     lin_truths = np.array(list(truths.values()))
@@ -156,60 +222,17 @@ if __name__ == "__main__":
 # Perform MCMC algorithm to attain best-fit parameters.
 
     # 9 dimensions (7 rotation rates, age, age std. deviation), 
-    # however many walkers, number of iterations:
-    nwalkers, nsteps = 1024, 512 # 4096 # 600, 2000
-    burn = -int(nsteps/2.) #4.)
+    # however many walkers, number of iterations (1024, 512 seems to work well):
+    minsteps = 32
+    nsteps = 1024 #1024, 512
+    # 32 steps minimum; the number of emcee culling steps is 16 minimum, so this ensures more 
+    # actual steps than culling steps. Number of culling steps could be reduced below, etc. if desired.
+    nsteps = max(minsteps, nsteps)
+    nwalkers = nsteps*2
+    # cut out first half of iterations as burn-in
+    burn = -int(nsteps/2)
 
-    #ndim, nwalkers, nsteps = 9, 20, 200
-    #burn = -100
-
-    # walkers initialized via uniform distribution centered on data mass, w/ +/- 1 range.
-    # Need a better way to initialize walkers...try setting them up on hyperplane of solutions.
-    #age_range = np.arange(8.5,9.5,0.02)
-    #age_posi = np.array([])
-    #agesig_posi = np.array([])
-    #rotw = np.array([])
-    #y = obs
-    #for i in range(nwalkers):
-    #    age_posi = np.append(age_posi, 9.0 + np.random.uniform(-0.2, 0.2, 1))
-        
-    #    if ndim == Nrot+2:
-    #        agesig_posi = np.append(agesig_posi, 0.1 + np.random.uniform(-0.05, 0.05, 1))
-    #        ageweights = gen_gaussweights(age_range, age_posi[i], agesig_posi[i])
-    #    else:
-    #        ageweights = gen_gaussweights(age_range, age_posi[i], sigma)
-
-    #    beta = np.array([-1.]*7)
-    #    #print(y.shape)
-    #    while not all(beta > 0.0):
-    #        X = np.sum(ageweights[:,np.newaxis]*model, axis=1)
-            #print(X.shape)
-    #        X += np.random.uniform(0,0.25,X.shape)
-    #        X = X.T
-            #print(X.shape)
-    #        XTXinv = np.linalg.inv(np.matmul(X.T, X))
-            #print(XTXinv.shape)
-    #        XTXinvXT = np.matmul(XTXinv, X.T)
-            #print(XTXinvXT.T.shape)
-    #        XTXinvXTy = np.matmul(XTXinvXT, y)
-    #        beta = XTXinvXTy
-    #    beta = np.log10(beta)
-    #    if i == 0:
-    #        rotw = beta
-    #    else:
-    #        rotw = np.vstack((rotw, beta))
-    #print(beta.shape)
-    #print(rotw.shape)
-    #print(model.shape)
-    #print(X.shape)
-    #print(beta)
-    #print(all(beta > 0.0))
-    #print(np.log10(beta))
-    #print(beta.shape)
-    #print(np.sum(X*beta))
-    #print(np.sum(y))
-    #sys.exit()
-
+    # Setting walkers up on hyperplane of solutions for the rotation weights using Dirichlet disribution.
     print("Initializing walker positions...")
     rotw = np.array([])
     #sample = np.array([-1.]*Nrot) 
@@ -238,25 +261,26 @@ if __name__ == "__main__":
     pos = []
     for i in range(nwalkers):
         posi = rotw[i]
-        #posi = truths[:Nrot] + np.random.uniform(-1, 1, Nrot)#np.random.uniform(-(np.log10(np.sum(obs))+0.01), 0.01, 7)
-        #posi = np.append(posi, age_posi[i])#
         # initial age positions randomized according to uniform dist. about supplied mean age.
         posi = np.append(posi, agemu + np.random.uniform(-0.2, 0.2, 1))
         if ndim == Nrot+2:
-            #posi = np.append(posi, agesig_posi[i])
             # initial age gaussian std. dev. randomized according to uniform dist. about supplied sigma.
+            #if agesig > 0.0:
             posi = np.append(posi, agesig + np.random.uniform(-0.05, 0.05, 1))
+            #else:
+            #    posi = np.append(posi, 0.05 + np.random.uniform(-0.05, 0.05, 1))
 
         pos.append(posi)
     print(pos[0])
     print("Sample sum of v/vc weights (log10) = ", np.log10(np.sum(10**pos[0][:Nrot])))
 
-    # debug plot
-    #with open('positions.txt', 'w') as f:
-    #    print(pos[:][:-1], file=f)
-
     # prior distribution limits for v/vc weights (assuming flat priors).
     lims = np.array([[max([0.0, np.log10(obsweight*1e-4)]), np.log10(obsweight*1.1)] for truth in truths[:Nrot]]) # was log10(obs) +/- 2 dex
+
+    # experimenting//checking if forcing rot dist on ngc 2249 reduces spread, it does, but not much at these levels
+    #lims[0] = [2.18, np.log10(obsweight*1.1)]
+    #lims[4] = [2.18, np.log10(obsweight*1.1)]
+    #lims[8] = [2.18, np.log10(obsweight*1.1)]
 
     print(truths)
     print(lin_truths)
@@ -267,13 +291,16 @@ if __name__ == "__main__":
 
     # the affine-invariant emcee sampler:
     print("Setting up MCMC sampler...")
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, kwargs = {"obs":obs, "model":model, "lims":lims, "dinds":dinds}, threads=ncpu)
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, kwargs = {"obs":obs, "model":model, "lims":lims, 
+                                                                      "dinds":dinds, "vvc_range":vvc_range, "age_range":age_range}, threads=ncpu)
     #sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_part, pool=pool)
 
     print("Running MCMC...")
     # run mcmc:
     print("Thinning chains...")
-    new_pos, sampler = burn_emcee(sampler, pos, [16, 32, 64, 128, 256, 512, 1024])#16, 32, 64, 128, 256, 512, 1024])
+    # creates an array of culling steps starting at minsteps/2, up to nsteps/2
+    emcee_burn_steps = [int(minsteps*2**(x-1)) for x in range(int( (np.log(nsteps) - np.log(minsteps))/np.log(2) + 1))]
+    new_pos, sampler = burn_emcee(sampler, pos, emcee_burn_steps)#16, 32, 64, 128, 256, 512, 1024])
     print("Doing full run...")
     pos, prob, state = sampler.run_mcmc(new_pos, nsteps)
 #    pool.close()
@@ -283,31 +310,6 @@ if __name__ == "__main__":
 
     print("Plotting results...")
     gfx.chain_plot(nwalkers, ndim, sampler, cmddir = cmddir, vvclim=vvclim, svdir=svdir, truths=truths, lintruths=lin_truths, burn=burn)
-
-    # plot ln P of full model:
-    #fig, ax = plt.subplots(1, figsize=(10,7))
-    #for i in range(nwalkers):
-    #    ax.plot(sampler.lnprobability[i, burn:])
-
-    #ax.set_xlabel("Step Number")
-    #ax.set_ylabel("ln P")
-
-    #plt.tight_layout()
-
-    #plt.savefig(os.path.join(cmddir, svdir, 'chains_lnP.png'))
-
-    # plot ln P of full model:
-    #fig, ax = plt.subplots(1, figsize=(10,7))
-    #ax.hist2d(range(len(chain[i, :, j])), chain[i, :, j], bins = 30, cmap = cmap)
-    #for i in range(nwalkers):
-    #    ax.plot(sampler.lnprobability[i, burn:])
-
-    #ax.set_xlabel("Step Number")
-    #ax.set_ylabel("ln P")
-
-    #plt.tight_layout()
-
-    #plt.savefig(os.path.join(cmddir, svdir, 'chains_lnP.png'))
 
     print("Mean acceptance fraction: {0:.3f}"
                     .format(np.mean(sampler.acceptance_fraction)))
@@ -322,8 +324,6 @@ if __name__ == "__main__":
     samples = sampler.chain[:, burn:, :].reshape((-1, ndim))
 
     log_weights, lin_weights, percentiles, log_err, lin_err = pr.get_results(samples)
-
-    #vvcs = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
 
     # plot of best solutions (weights) vs. v/vc:
     f,ax=plt.subplots(1,1,figsize=(16,9))
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     log_highlnP_weights, lin_highlnP_weights = gfx.plot_random_weights(sampler, nsteps, ndim, lin_weights, lin_err, cmddir, vvclim, log=False, svdir=svdir, truths=lin_truths, burn=burn)
 
     # do pg style plots using final 50th percentile weights:
-    gfx.pgplot(obs, model, cmddir, bf, agemu, logz, av, dmod, vvclim, log_weights, filters, svdir=svdir)
+    gfx.pgplot(obs, model, cmddir, bf, agemu, logz, av, dmod, vvclim, log_weights, filters, age_range, svdir=svdir)
 
     if vvcsig == 0.0:
         row_names = np.array(["t0", "age"])
@@ -360,6 +360,13 @@ if __name__ == "__main__":
         row_names = np.append(row_names, "age_sig")
 
     print(row_names)
+    print(len(row_names))
+    print(len(log_highlnP_weights))
+    print(len(log_weights))
+    print(len(log_err['higher']))
+    print(len(log_err['lower']))
+    print(len(truths))
+
     np.savetxt(os.path.join(cmddir, svdir, 'log_solutions.txt'),
                 X=np.c_[row_names, log_highlnP_weights, log_weights, log_err['higher'], log_err['lower'], truths], delimiter='\t',fmt="%s", header="MAP\t 50th Percentile\t +err\t -err\t truth")
     np.savetxt(os.path.join(cmddir, svdir, 'lin_solutions.txt'),
